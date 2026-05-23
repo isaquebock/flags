@@ -1,0 +1,32 @@
+# Root-level ignores for both sub-projects
+
+# Node / TypeScript (function/)
+node_modules/
+function/dist/
+function/build/
+function/.env
+function/.env.local
+function/azion/args.json
+npm-debug.log*
+
+# Go (api/)
+api/api
+api/bin/
+api/dist/
+api/.env
+api/.env.local
+
+# Build artifacts
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
