@@ -44,6 +44,12 @@ function createBuildItems() {
       to: '/variables',
       icon: 'ai ai-variables',
       id: 'variables'
+    },
+    {
+      label: 'Feature Flags',
+      to: '/feature-flags',
+      icon: 'pi pi-flag',
+      id: 'feature-flags'
     }
   ]
 }

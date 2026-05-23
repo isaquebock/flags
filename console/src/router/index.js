@@ -1,5 +1,6 @@
 import { inject } from 'vue'
 import { accountRoutes } from '@routes/account-routes'
+import { featureFlagsRoutes } from '@routes/feature-flags-routes'
 import { activityHistoryRoutes } from '@routes/activity-history-routes'
 import { azionAiRoutes } from '@routes/azion-ai-routes'
 
@@ -73,6 +74,7 @@ const router = createRouter({
     networkListsRoutes,
     personalTokensRoutes,
     variablesRoutes,
+    featureFlagsRoutes,
     edgeNodeRoutes,
     usersListsRoutes,
     passwordRoutes,
