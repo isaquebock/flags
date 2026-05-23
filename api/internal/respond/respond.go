@@ -1,0 +1,24 @@
+package respond
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+type ErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Status  int    `json:"status"`
+}
+
+func Error(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(ErrorResponse{Code: code, Message: message, Status: status})
+}
+
+func JSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}

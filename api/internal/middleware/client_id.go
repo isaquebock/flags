@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/isaquebock/flags-api/internal/handlers"
+	"github.com/isaquebock/flags-api/internal/respond"
 	"github.com/isaquebock/flags-api/internal/validation"
 )
 
@@ -30,12 +30,12 @@ func ClientIDMiddleware(next http.Handler) http.Handler {
 		clientID := GetClientID(r)
 
 		if clientID == "" {
-			handlers.WriteError(w, http.StatusBadRequest, "missing_client_id", "X-Client-Id header is required")
+			respond.Error(w, http.StatusBadRequest, "missing_client_id", "X-Client-Id header is required")
 			return
 		}
 
 		if err := validation.ValidateClientID(clientID); err != nil {
-			handlers.WriteError(w, http.StatusBadRequest, "invalid_client_id", err.Error())
+			respond.Error(w, http.StatusBadRequest, "invalid_client_id", err.Error())
 			return
 		}
 

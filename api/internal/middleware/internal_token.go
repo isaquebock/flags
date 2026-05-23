@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/isaquebock/flags-api/internal/handlers"
+	"github.com/isaquebock/flags-api/internal/respond"
 )
 
 func InternalTokenMiddleware(expectedToken string) func(next http.Handler) http.Handler {
@@ -12,12 +12,12 @@ func InternalTokenMiddleware(expectedToken string) func(next http.Handler) http.
 			token := r.Header.Get("X-Internal-Token")
 
 			if token == "" {
-				handlers.WriteError(w, http.StatusUnauthorized, "missing_internal_token", "X-Internal-Token header is required")
+				respond.Error(w, http.StatusUnauthorized, "missing_internal_token", "X-Internal-Token header is required")
 				return
 			}
 
 			if token != expectedToken {
-				handlers.WriteError(w, http.StatusUnauthorized, "invalid_internal_token", "Invalid X-Internal-Token")
+				respond.Error(w, http.StatusUnauthorized, "invalid_internal_token", "Invalid X-Internal-Token")
 				return
 			}
 
