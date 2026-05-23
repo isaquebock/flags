@@ -1,0 +1,326 @@
+<script setup>
+  import FormFieldsDrawerOrigin from '@/views/EdgeApplicationsOrigins/FormFields/FormFieldsEdgeApplicationsOrigins'
+  import CreateDrawerBlock from '@templates/create-drawer-block'
+  import EditDrawerBlock from '@templates/edit-drawer-block'
+  import DialogCopyKey from '@templates/dialog-copy-key'
+  import { refDebounced } from '@vueuse/core'
+  import { onMounted } from 'vue'
+  import { useAccountStore } from '@/stores/account'
+  import { loadProductsListService } from '@/services/contract-services'
+  import { useDialog } from '@aziontech/webkit/use-dialog'
+  import { createOriginService } from '@/services/edge-application-origins-services'
+  import { inject, ref, computed } from 'vue'
+  import * as yup from 'yup'
+  /**@type {import('@/plugins/adapters/AnalyticsTrackerAdapter').AnalyticsTrackerAdapter} */
+  import { handleTrackerError } from '@/utils/errorHandlingTracker'
+
+  const tracker = inject('tracker')
+  const edgeApplication = inject('edgeApplication')
+  defineOptions({ name: 'drawer-origin' })
+
+  const emit = defineEmits(['onSuccess'])
+  const dialog = useDialog()
+
+  const props = defineProps({
+    showBarGoBack: {
+      type: Boolean,
+      default: true
+    },
+    edgeApplicationId: {
+      type: String,
+      required: true
+    },
+    editOriginService: {
+      type: Function
+    },
+    loadOriginService: {
+      type: Function
+    },
+    documentationService: {
+      type: Function,
+      required: true
+    }
+  })
+
+  onMounted(async () => {
+    const products = await loadProductsListService({ clientId: accountStore.account.client_id })
+    if (products.slugs.includes('live_ingest')) {
+      hasLiveIngest.value = true
+    }
+    originTypesOptions.value.push({
+      label: 'Live Ingest',
+      value: 'live_ingest',
+      disabled: !hasLiveIngest.value
+    })
+  })
+
+  const accountStore = useAccountStore()
+  const showCreateOriginDrawer = ref(false)
+  const hasLiveIngest = ref(false)
+  const showEditOriginDrawer = ref(false)
+  const debouncedDrawerAnimate = 300
+  const loadCreateOriginDrawer = refDebounced(showCreateOriginDrawer, debouncedDrawerAnimate)
+  const loadEditOriginDrawer = refDebounced(showEditOriginDrawer, debouncedDrawerAnimate)
+  const selectedOriginToEdit = ref('')
+  const originTypesOptions = computed(() => [
+    {
+      label: 'Single Origin',
+      value: 'single_origin',
+      disabled: false
+    },
+    {
+      label: 'Load Balancer',
+      value: 'load_balancer',
+      disabled: !edgeApplication.value?.loadBalancer
+    },
+    {
+      label: 'Object Storage',
+      value: 'object_storage',
+      disabled: false
+    }
+  ])
+
+  const initialValues = ref({
+    id: props.edgeApplicationId,
+    originKey: '',
+    name: '',
+    hostHeader: '${host}',
+    addresses: [
+      {
+        address: '',
+        weight: 1,
+        serverRole: 'primary',
+        isActive: true
+      }
+    ],
+    originType: 'single_origin',
+    originProtocolPolicy: 'preserve',
+    method: 'ip_hash',
+    originPath: '',
+    connectionTimeout: 60,
+    timeoutBetweenBytes: 120,
+    hmacAuthentication: false,
+    hmacRegionName: '',
+    hmacAccessKey: '',
+    hmacSecretKey: '',
+    bucketName: null,
+    prefix: ''
+  })
+
+  const createFormDrawer = ref('')
+  const originKey = ref('')
+
+  const validationSchema = yup.object({
+    name: yup.string().required().label('Name'),
+    originType: yup.string().required().label('Origin Type'),
+    hostHeader: yup
+      .string()
+      .label('Host Header')
+      .when('originType', {
+        is: (originType) => originType !== 'object_storage' && originType !== 'live_ingest',
+        then: (schema) => schema.required()
+      }),
+    addresses: yup.array().when('originType', {
+      is: (originType) => originType === 'object_storage' || originType === 'live_ingest',
+      then: (schema) => schema.optional(),
+      otherwise: (schema) =>
+        schema.of(
+          yup.object().shape({
+            address: yup.string().label('Address').required(),
+            weight: yup
+              .number()
+              .nullable()
+              .min(1)
+              .max(10)
+              .label('Weight')
+              .test('weight-required', 'Weight is a required field', function (value) {
+                const { originType } = this.from[1].value
+                if (originType === 'load_balancer') {
+                  return value != null
+                }
+                return true
+              }),
+            isActive: yup.boolean().default(true).label('Active')
+          })
+        )
+    }),
+    originPath: yup
+      .string()
+      .test('valid', 'Use a valid origin path.', (value) => {
+        return /^(\/\.?[\w][\w.-]*)+$/.test(value) || !value
+      })
+      .label('Origin Path'),
+    streamingEndpoint: yup
+      .string()
+      .label('Streaming Endpoint')
+      .when('originType', {
+        is: (originType) => originType === 'live_ingest',
+        then: (schema) => schema.required()
+      }),
+    hmacAuthentication: yup.boolean(),
+    hmacRegionName: yup
+      .string()
+      .when('hmacAuthentication', {
+        is: true,
+        then: (schema) => schema.required()
+      })
+      .label('Region Name'),
+    hmacAccessKey: yup
+      .string()
+      .when('hmacAuthentication', {
+        is: true,
+        then: (schema) => schema.required()
+      })
+      .label('Access Key'),
+    hmacSecretKey: yup
+      .string()
+      .when('hmacAuthentication', {
+        is: true,
+        then: (schema) => schema.required()
+      })
+      .label('Secret Key'),
+    bucketName: yup
+      .string()
+      .when('originType', {
+        is: 'object_storage',
+        then: (schema) => schema.required(),
+        otherwise: (schema) => schema.notRequired()
+      })
+      .label('Bucket Name')
+  })
+
+  const editService = async (payload) => {
+    payload.id = payload.originKey
+    return await props.editOriginService({
+      ...payload,
+      applicationId: props.edgeApplicationId
+    })
+  }
+
+  const loadService = async (payload) => {
+    const edgeNode = await props.loadOriginService({
+      ...payload,
+      applicationId: props.edgeApplicationId
+    })
+    return edgeNode
+  }
+
+  const openDrawerCreate = () => {
+    showCreateOriginDrawer.value = true
+  }
+
+  const openDrawerEdit = (id) => {
+    if (id) {
+      selectedOriginToEdit.value = id.toString()
+      showEditOriginDrawer.value = true
+    }
+  }
+
+  const handleTrackEdit = () => {
+    tracker.product
+      .productEdited({
+        productName: 'Origin'
+      })
+      .product.productEdited({
+        productName: 'Edge Application',
+        tab: 'origins'
+      })
+      .track()
+
+    emit('onSuccess')
+  }
+
+  const handleTrackCreation = () => {
+    tracker.product
+      .productCreated({
+        productName: 'Origin'
+      })
+      .track()
+  }
+
+  const handleFailedEditOrigin = (error) => {
+    const { fieldName, message } = handleTrackerError(error)
+    tracker.product
+      .failedToEdit({
+        productName: 'Origin',
+        errorMessage: message,
+        fieldName: fieldName,
+        errorType: 'api'
+      })
+      .track()
+  }
+
+  const handleFailedCreateOrigin = (error) => {
+    const { fieldName, message } = handleTrackerError(error)
+    tracker.product
+      .failedToCreate({
+        productName: 'Origin',
+        errorType: 'api',
+        fieldName: fieldName.trim(),
+        errorMessage: message
+      })
+      .track()
+  }
+
+  const handleCreateOrigin = (data) => {
+    handleTrackCreation()
+
+    dialog.open(DialogCopyKey, {
+      data: {
+        title: 'Origin Key',
+        token: data.originKey,
+        mask: false
+      }
+    })
+
+    originKey.value = data.originKey
+    emit('onSuccess')
+  }
+
+  defineExpose({
+    showCreateOriginDrawer,
+    openDrawerCreate,
+    openDrawerEdit
+  })
+</script>
+
+<template>
+  <CreateDrawerBlock
+    v-if="loadCreateOriginDrawer"
+    v-model:visible="showCreateOriginDrawer"
+    :createService="createOriginService"
+    drawerId="create-origin-drawer"
+    :schema="validationSchema"
+    :initialValues="initialValues"
+    @onSuccess="handleCreateOrigin"
+    @onError="handleFailedCreateOrigin"
+    title="Create Origin"
+  >
+    <template #formFields="{ disabledFields }">
+      <FormFieldsDrawerOrigin
+        ref="createFormDrawer"
+        :disabledFields="disabledFields"
+        :listOrigins="originTypesOptions"
+      />
+    </template>
+  </CreateDrawerBlock>
+  <EditDrawerBlock
+    v-if="loadEditOriginDrawer"
+    :id="selectedOriginToEdit"
+    v-model:visible="showEditOriginDrawer"
+    :loadService="loadService"
+    :editService="editService"
+    :schema="validationSchema"
+    @onSuccess="handleTrackEdit"
+    @onError="handleFailedEditOrigin"
+    title="Edit Origin"
+  >
+    <template #formFields="{ disabledFields }">
+      <FormFieldsDrawerOrigin
+        isEditMode
+        :disabledFields="disabledFields"
+        :listOrigins="originTypesOptions"
+      />
+    </template>
+  </EditDrawerBlock>
+</template>

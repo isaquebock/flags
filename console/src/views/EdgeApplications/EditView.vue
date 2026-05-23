@@ -1,0 +1,96 @@
+<template>
+  <EditFormBlock
+    :editService="edgeAppService.editEdgeApplicationService"
+    :loadService="loadEdgeApplication"
+    :updatedRedirect="props.updatedRedirect"
+    :initialValues="props.initialValues ?? {}"
+    :schema="validationSchema"
+    @on-edit-success="handleTrackSuccessEdit"
+    @on-edit-fail="handleTrackFailEdit"
+    disableRedirect
+    isTabs
+    data-testid="edit-edge-application-form-block"
+  >
+    <template #form>
+      <FormFieldsEditEdgeApplications
+        :handleBlock="handleBlocks"
+        :contactSalesEdgeApplicationService="contactSalesEdgeApplicationService"
+        data-testid="edit-edge-application-form-fields"
+      />
+    </template>
+    <template #action-bar="{ onSubmit, formValid, onCancel, loading, values }">
+      <ActionBarBlockWithTeleport
+        @onSubmit="formSubmit(onSubmit, values, formValid)"
+        @onCancel="onCancel"
+        :loading="loading"
+        data-testid="edit-edge-application-action-bar"
+      />
+    </template>
+  </EditFormBlock>
+</template>
+
+<script setup>
+  import EditFormBlock from '@/templates/edit-form-block'
+  import ActionBarBlockWithTeleport from '@templates/action-bar-block/action-bar-with-teleport'
+  import * as yup from 'yup'
+  import FormFieldsEditEdgeApplications from './FormFields/FormFieldsEditEdgeApplications.vue'
+  import { inject } from 'vue'
+
+  defineOptions({ name: 'edit-application' })
+
+  const emit = defineEmits(['updatedApplication'])
+  /**@type {import('@/plugins/analytics/AnalyticsTrackerAdapter').AnalyticsTrackerAdapter} */
+  import { handleTrackerError } from '@/utils/errorHandlingTracker'
+  import { edgeAppService } from '@/services/v2/edge-app/edge-app-service'
+
+  const tracker = inject('tracker')
+
+  const props = defineProps({
+    updatedRedirect: {
+      type: String,
+      required: true
+    },
+    edgeApplication: { type: Object },
+    initialValues: { type: Object, default: () => ({}) },
+    contactSalesEdgeApplicationService: {
+      type: Function,
+      required: true
+    }
+  })
+
+  const handleBlocks = ['general', 'delivery-settings', 'edge-application-modules', 'debug-rules']
+
+  const validationSchema = yup.object({
+    name: yup.string().required()
+  })
+
+  const loadEdgeApplication = async () => {
+    return props.edgeApplication
+  }
+
+  const handleTrackSuccessEdit = () => {
+    tracker.product
+      .productEdited({
+        productName: 'Application',
+        tab: 'mainSettings'
+      })
+      .track()
+  }
+  const handleTrackFailEdit = (error) => {
+    const { fieldName, message } = handleTrackerError(error)
+    tracker.product
+      .failedToEdit({
+        productName: 'Application',
+        errorType: 'api',
+        fieldName: fieldName.trim(),
+        errorMessage: message
+      })
+      .track()
+  }
+
+  const formSubmit = async (onSubmit, values, formValid) => {
+    await onSubmit()
+    if (!formValid) return
+    emit('updatedApplication', values)
+  }
+</script>

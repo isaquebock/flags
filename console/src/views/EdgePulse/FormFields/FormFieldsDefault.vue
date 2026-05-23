@@ -1,0 +1,60 @@
+<script setup>
+  import { ref, computed } from 'vue'
+  import { useThemeStore } from '@/stores/theme'
+  import copyBlock from '@aziontech/webkit/button-copy'
+
+  import FormHorizontal from '@/templates/create-form-block/form-horizontal'
+  const defaultTagCode = ref(`<script>
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('load', function() {
+        if (window.azpulse === undefined) {
+          var pulse = document.createElement('script');
+          pulse.src = '//client.azionrum.net/8900e/azion-pulse.js';
+          document.body.appendChild(pulse);
+        }
+      })
+    }
+  <${'/'}script>`)
+
+  const editorOptions = ref({
+    minimap: { enabled: false },
+    readOnly: true,
+    scrollBeyondLastLine: false
+  })
+
+  const store = useThemeStore()
+
+  const theme = computed(() => {
+    return store.currentTheme === 'light' ? 'vs' : 'vs-dark'
+  })
+</script>
+
+<template>
+  <FormHorizontal
+    title="Default Tag"
+    description="The script waits until the loading event is completed before downloading and running the RUM Client. The loading event isn’t interrupted and doesn’t affect the user experience."
+  >
+    <template #inputs>
+      <div>
+        <div class="flex flex-col gap-2 w-[99.9%]">
+          <vue-monaco-editor
+            v-model:value="defaultTagCode"
+            language="javascript"
+            :theme="theme"
+            :options="editorOptions"
+            class="min-h-[200px] overflow-clip surface-border border rounded-md p-disabled"
+          />
+          <small class="text-xs text-color-secondary font-normal leading-5">
+            Cannot edit in read-only editor
+          </small>
+        </div>
+      </div>
+      <div>
+        <copyBlock
+          :value="defaultTagCode"
+          label="Copy script"
+        />
+      </div>
+    </template>
+  </FormHorizontal>
+</template>

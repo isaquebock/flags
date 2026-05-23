@@ -1,0 +1,159 @@
+<script setup>
+  import DialogUnsaved from '@/templates/dialog-unsaved/DialogUnsaved.vue'
+
+  import { useToast } from '@aziontech/webkit/use-toast'
+  import { useForm, useIsFormDirty } from 'vee-validate'
+  import { ref } from 'vue'
+  import { useRouter } from 'vue-router'
+  import { useScrollToError } from '@/composables/useScrollToError'
+  import { capitalizeFirstLetter } from '@/helpers'
+  import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
+
+  defineOptions({ name: 'form-accordion' })
+
+  const props = defineProps({
+    createService: {
+      type: Function,
+      required: true
+    },
+    schema: {
+      type: Object,
+      required: true
+    },
+    initialValues: {
+      type: Object,
+      default: () => ({})
+    },
+    disabledCallback: {
+      type: Boolean,
+      default: false
+    },
+    disableAfterCreateToastFeedback: {
+      type: Boolean,
+      default: false
+    },
+    cleanForm: {
+      type: Boolean,
+      default: true
+    },
+    unSaved: {
+      type: Boolean,
+      default: true
+    }
+  })
+
+  const emit = defineEmits(['on-response', 'on-response-fail'])
+  const { scrollToError } = useScrollToError()
+
+  const router = useRouter()
+  const toast = useToast()
+
+  const isFormReady = ref(props.unSaved)
+
+  const unsaved = useUnsavedChanges({
+    isReady: isFormReady,
+    enableRouteGuard: true,
+    enableBeforeUnload: true
+  })
+
+  if (!props.unSaved) {
+    unsaved.disable()
+  }
+
+  const { meta, errors, handleSubmit, isSubmitting, values, resetForm } = useForm({
+    validationSchema: props.schema,
+    initialValues: props.initialValues
+  })
+
+  const isDirty = useIsFormDirty()
+  unsaved.addDirtySource(isDirty)
+
+  const showToast = (severity, detail) => {
+    if (!detail) return
+    const options = {
+      closable: true,
+      severity,
+      summary: capitalizeFirstLetter(severity),
+      detail
+    }
+
+    toast.add(options)
+  }
+
+  const showFeedback = (feedback = 'created successfully') => {
+    const feedbackMessage = feedback
+    if (props.disableAfterCreateToastFeedback) {
+      return
+    }
+    showToast('success', feedbackMessage)
+  }
+
+  const redirectToUrl = (path) => {
+    router.push({ path })
+  }
+
+  const handleSuccess = (response) => {
+    emit('on-response', response)
+    showFeedback(response?.feedback)
+    if (props.disabledCallback) return
+    redirectToUrl(response?.urlToEditView)
+  }
+
+  const onSubmit = handleSubmit(
+    async (values) => {
+      try {
+        unsaved.disable()
+        const response = await props.createService(values)
+        handleSuccess(response)
+      } catch (error) {
+        unsaved.enable()
+        // Check if error is an ErrorHandler instance (from v2 services)
+        if (error && typeof error.showErrors === 'function') {
+          error.showErrors(toast)
+          emit('onError', error.message[0])
+        } else {
+          // Fallback for legacy errors or non-ErrorHandler errors
+          showToast('error', error)
+          emit('on-response-fail', error)
+        }
+      }
+    },
+    ({ errors }) => {
+      scrollToError(errors)
+    }
+  )
+
+  defineExpose({
+    resetForm,
+    values
+  })
+</script>
+
+<template>
+  <div>
+    <form>
+      <slot
+        name="form"
+        :resetForm="resetForm"
+        :errors="errors"
+      />
+      <slot
+        name="raw-form"
+        :errors="errors"
+      />
+    </form>
+    <DialogUnsaved
+      :visible="unsaved.isDialogVisible.value"
+      @leave="unsaved.confirmLeave"
+      @stay="unsaved.cancelLeave"
+    />
+    <slot
+      name="action-bar-accordion"
+      :onSubmit="onSubmit"
+      :formValid="meta.valid"
+      :errors="errors"
+      :loading="isSubmitting"
+      :values="values"
+    />
+  </div>
+</template>

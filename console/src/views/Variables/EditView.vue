@@ -1,0 +1,88 @@
+<script setup>
+  import EditFormBlock from '@/templates/edit-form-block'
+  import ContentBlock from '@/templates/content-block'
+  import PageHeadingBlock from '@/templates/page-heading-block'
+  import ActionBarTemplate from '@/templates/action-bar-block/action-bar-with-teleport'
+  import FormFieldsVariables from './FormFields/FormFieldsVariables.vue'
+  import * as yup from 'yup'
+  import { inject, ref } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { handleTrackerError } from '@/utils/errorHandlingTracker'
+  import { useBreadcrumbs } from '@/stores/breadcrumbs'
+  import { variablesService } from '@/services/v2/variables'
+
+  /**@type {import('@/plugins/analytics/AnalyticsTrackerAdapter').AnalyticsTrackerAdapter} */
+  const tracker = inject('tracker')
+  const route = useRoute()
+  const breadcrumbs = useBreadcrumbs()
+  const variableName = ref('Edit Variable')
+
+  const cachedVariable = variablesService.getVariableFromCache(route.params?.id) ?? {}
+
+  const setVariableName = (variable) => {
+    variableName.value = variable.key
+    breadcrumbs.update(route.meta.breadCrumbs ?? [], route, variable.key)
+  }
+
+  const keyRegex = /^[A-Z0-9_]*$/
+
+  const validationSchema = yup.object({
+    key: yup
+      .string()
+      .test('key', 'Invalid key format', (value) => keyRegex.test(value))
+      .required(),
+    value: yup.string().required(),
+    secret: yup.boolean().required().default(false)
+  })
+
+  const handleTrackEditEvent = () => {
+    tracker.product.productEdited({
+      productName: 'Variable'
+    })
+  }
+
+  const handleTrackFailEditEvent = (error) => {
+    const { fieldName, message } = handleTrackerError(error)
+    tracker.product
+      .failedToEdit({
+        productName: 'Variable',
+        errorType: 'api',
+        fieldName: fieldName.trim(),
+        errorMessage: message
+      })
+      .track()
+  }
+</script>
+<template>
+  <ContentBlock>
+    <template #heading>
+      <PageHeadingBlock
+        :pageTitle="variableName"
+        description="Configure variable names, values, and settings for use across Azion’s products."
+      />
+    </template>
+    <template #content>
+      <EditFormBlock
+        :editService="variablesService.edit"
+        :loadService="variablesService.load"
+        updatedRedirect="list-variables"
+        :initialValues="cachedVariable"
+        :schema="validationSchema"
+        @loaded-service-object="setVariableName"
+        @on-edit-success="handleTrackEditEvent"
+        @on-edit-fail="handleTrackFailEditEvent"
+      >
+        <template #form>
+          <FormFieldsVariables />
+        </template>
+        <template #action-bar="{ onSubmit, onCancel, loading }">
+          <ActionBarTemplate
+            @onSubmit="onSubmit"
+            @onCancel="onCancel"
+            :loading="loading"
+          />
+        </template>
+      </EditFormBlock>
+    </template>
+  </ContentBlock>
+</template>

@@ -1,0 +1,99 @@
+<script setup>
+  import { inject } from 'vue'
+  import { handleTrackerError } from '@/utils/errorHandlingTracker'
+  import CreateFormBlock from '@/templates/create-form-block'
+  import FormFieldsTeamPermissions from './FormFields/FormFieldsTeamPermissions.vue'
+  import ContentBlock from '@/templates/content-block'
+  import PageHeadingBlock from '@/templates/page-heading-block'
+  import ActionBarTemplate from '@/templates/action-bar-block/action-bar-with-teleport'
+  import { teamPermissionService } from '@/services/v2/team-permission'
+
+  import * as yup from 'yup'
+
+  /**@type {import('@/plugins/analytics/AnalyticsTrackerAdapter').AnalyticsTrackerAdapter} */
+  const tracker = inject('tracker')
+
+  const validationSchema = yup.object({
+    name: yup.string().required('Name is a required field'),
+    permissions: yup.array().required('Permission is a required field').min(1),
+    isActive: yup.boolean()
+  })
+
+  const initialValues = {
+    name: '',
+    permissions: [],
+    isActive: true
+  }
+
+  const resetForm = () => {
+    return initialValues
+  }
+
+  const handleResponse = (response) => {
+    tracker.product.productCreated({
+      productName: 'Teams Permissions'
+    })
+    handleToast(response)
+  }
+
+  const handleToast = (response) => {
+    const toast = {
+      feedback: 'Your team permission has been created',
+      actions: {
+        link: {
+          label: 'View Team Permission',
+          callback: () => response.redirectToUrl(`/teams-permission/edit/${response.id}`)
+        }
+      }
+    }
+    response.showToastWithActions(toast)
+  }
+
+  const handleTrackFailCreated = (error) => {
+    const { fieldName, message } = handleTrackerError(error)
+    tracker.product
+      .failedToCreate({
+        productName: 'Teams Permissions',
+        errorType: 'api',
+        fieldName: fieldName.trim(),
+        errorMessage: message
+      })
+      .track()
+  }
+</script>
+
+<template>
+  <ContentBlock>
+    <template #heading>
+      <PageHeadingBlock
+        pageTitle="Create Team"
+        data-testid="teams-permissions__create-view__page-heading"
+        description="Configure permissions for team collaboration."
+      />
+    </template>
+    <template #content>
+      <CreateFormBlock
+        :createService="teamPermissionService.create"
+        :cleanFormCallback="resetForm"
+        :schema="validationSchema"
+        :initialValues="initialValues"
+        @on-response="handleResponse"
+        @on-response-fail="handleTrackFailCreated"
+        disableToast
+      >
+        <template #form>
+          <FormFieldsTeamPermissions
+            :listPermissionService="teamPermissionService.listPermissions"
+          />
+        </template>
+        <template #action-bar="{ onSubmit, onCancel, loading }">
+          <ActionBarTemplate
+            @onSubmit="onSubmit"
+            @onCancel="onCancel"
+            :loading="loading"
+          />
+        </template>
+      </CreateFormBlock>
+    </template>
+  </ContentBlock>
+</template>

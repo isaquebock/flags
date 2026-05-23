@@ -1,0 +1,147 @@
+<script setup>
+  import FormHorizontal from '@/templates/create-form-block/form-horizontal'
+  import FieldTextArea from '@aziontech/webkit/field-text-area'
+  import PrimeTag from '@aziontech/webkit/prime-tag'
+  import { useField } from 'vee-validate'
+  import { computed, watch } from 'vue'
+  import FieldGroupRadio from '@aziontech/webkit/field-group-radio'
+
+  const { value: layer } = useField('layer')
+  const { value: purgeType } = useField('purgeType')
+
+  const computedPurgeArgumentsPlaceHolder = computed(() => {
+    if (purgeType.value === 'cachekey') {
+      return 'httpswww.example.com/images/image.jpg'
+    }
+    if (purgeType.value === 'wildcard') {
+      return 'www.example.com/images/*'
+    }
+    return 'www.example.com/images/image.jpg'
+  })
+
+  watch(layer, (newValue) => {
+    if (newValue === 'tiered_cache') {
+      purgeType.value = 'cachekey'
+    }
+  })
+
+  const layerRadioOptions = [
+    {
+      title: 'Cache',
+      inputValue: 'cache',
+      subtitle: `Purge content from Azion's cache layer.`
+    },
+    {
+      title: 'Tiered Cache',
+      inputValue: 'tiered_cache',
+      name: 'tiered-cache-layer',
+      subtitle: `Purge content from Azion's tiered cache layer.`
+    }
+  ]
+
+  const isLayerTieredCache = computed(() => layer.value === 'tiered_cache')
+
+  const showHelperTextArguments = computed(() => {
+    const helpText = {
+      cacheKey: '',
+      default: 'Separate each argument using a new line.'
+    }
+    if (purgeType.value === 'cachekey') {
+      helpText.cacheKey = `Use this specific format ”httpswww.example.com/images/image.jpg”`
+    }
+
+    return helpText
+  })
+
+  const purgeTypeRadioOptions = computed(() => {
+    return [
+      {
+        title: 'Cache Key',
+        inputValue: 'cachekey',
+        name: 'cachekey-purge-type',
+        disabled: isLayerTieredCache.value,
+        subtitle: `Enter a list of content cache keys to be purged.`,
+        tag: {
+          value: 'Automatically enabled in all accounts.',
+          icon: 'pi pi-lock'
+        }
+      },
+      {
+        title: 'URL',
+        inputValue: 'url',
+        name: 'url-purge-type',
+        hide: isLayerTieredCache.value,
+        subtitle: `Enter a list of content URLs to be purged.`
+      },
+      {
+        title: 'Wildcard',
+        inputValue: 'wildcard',
+        name: 'wildcard-purge-type',
+        hide: isLayerTieredCache.value,
+        subtitle: `Enter a list of content URLs to be purged. Asterisks (*) are considered wildcard expressions.`
+      }
+    ]
+  })
+</script>
+
+<template>
+  <FormHorizontal
+    title="Layer Settings"
+    description="Select where the purge should be made."
+  >
+    <template #inputs>
+      <FieldGroupRadio
+        nameField="layer"
+        isCard
+        :options="layerRadioOptions"
+      />
+    </template>
+  </FormHorizontal>
+
+  <FormHorizontal
+    title="Purge Type"
+    description="Select how the content should be identified."
+  >
+    <template #inputs>
+      <FieldGroupRadio
+        nameField="purgeType"
+        isCard
+        :options="purgeTypeRadioOptions"
+      >
+        <template #footer="{ item }">
+          <PrimeTag
+            v-if="item?.tag && isLayerTieredCache"
+            :value="item.tag.value"
+            :icon="item.tag.icon"
+            severity="info"
+            class="mt-3"
+          />
+        </template>
+      </FieldGroupRadio>
+    </template>
+  </FormHorizontal>
+
+  <FormHorizontal
+    title="Arguments"
+    description="Insert a list of cache keys, URLs, or wildcard expressions according to the purge type selected."
+  >
+    <template #inputs>
+      <div class="flex flex-col sm:max-w-lg w-full gap-2">
+        <FieldTextArea
+          data-testid="purge__arguments-field"
+          label="Arguments List"
+          required
+          name="argumentsPurge"
+          rows="2"
+          :placeholder="computedPurgeArgumentsPlaceHolder"
+          autoResize
+        >
+          <template #description>
+            <p v-if="showHelperTextArguments.cacheKey">{{ showHelperTextArguments.cacheKey }}</p>
+            {{ showHelperTextArguments.default }}
+          </template>
+        </FieldTextArea>
+      </div>
+    </template>
+  </FormHorizontal>
+</template>

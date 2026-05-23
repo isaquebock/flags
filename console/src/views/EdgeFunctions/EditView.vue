@@ -1,0 +1,147 @@
+<script setup>
+  import { ref, inject } from 'vue'
+  import { useRoute } from 'vue-router'
+  import * as yup from 'yup'
+
+  import ContentBlock from '@/templates/content-block'
+  import EditFormBlock from '@/templates/edit-form-block'
+  import ActionBarBlockWithTeleport from '@templates/action-bar-block/action-bar-with-teleport'
+  import PageHeadingBlock from '@/templates/page-heading-block'
+
+  import FormFieldsEditEdgeFunctions from './FormFields/FormFieldsEditEdgeFunctions.vue'
+  import FormSkeleton from './components/FormSkeleton.vue'
+
+  import { handleTrackerError } from '@/utils/errorHandlingTracker'
+
+  /**@type {import('@/plugins/analytics/AnalyticsTrackerAdapter').AnalyticsTrackerAdapter} */
+  const tracker = inject('tracker')
+  import { edgeFunctionService } from '@/services/v2/edge-function/edge-function-service'
+  import { useBreadcrumbs } from '@/stores/breadcrumbs'
+
+  const props = defineProps({
+    updatedRedirect: {
+      type: String,
+      required: true
+    }
+  })
+
+  const route = useRoute()
+  const breadcrumbs = useBreadcrumbs()
+
+  const cachedFunction = edgeFunctionService.getEdgeFunctionFromCache(route.params?.id) ?? {}
+  const isLoading = ref(false)
+  const isFormLoading = ref(true)
+  const additionalErrors = ref([])
+  const updateObject = ref({})
+  const runtime = ref(null)
+  const name = ref(cachedFunction.name || '')
+
+  const handleTrackSuccessEdit = () => {
+    tracker.product
+      .productEdited({
+        productName: 'Edge Functions'
+      })
+      .track()
+  }
+  const handleTrackFailEdit = (error) => {
+    const { fieldName, message } = handleTrackerError(error)
+    tracker.product
+      .failedToEdit({
+        productName: 'Edge Functions',
+        errorType: 'api',
+        fieldName: fieldName.trim(),
+        errorMessage: message
+      })
+      .track()
+  }
+
+  const validationSchema = yup.object({
+    name: yup.string().required('Name is a required field'),
+    code: yup.string().required('Code is a required field'),
+    azionForm: yup.object(),
+    defaultArgs: yup.string().test('validJson', 'Invalid JSON', (value) => {
+      let isValidJson = true
+      try {
+        JSON.parse(value)
+      } catch {
+        isValidJson = false
+      }
+      return isValidJson
+    }),
+    active: yup.boolean(),
+    runtime: yup.string(),
+    runtimeFormat: yup.object().nullable(),
+    executionEnvironment: yup.string(),
+    isProprietaryCode: yup.boolean()
+  })
+
+  const hasAdditionalErrors = () => {
+    return additionalErrors.value.length
+  }
+
+  const handleAdditionalErrors = (errors) => {
+    additionalErrors.value = errors
+  }
+
+  const setFunctionData = (edgeFunction) => {
+    name.value = edgeFunction.name
+    isFormLoading.value = false
+    breadcrumbs.update(route.meta.breadCrumbs ?? [], route, edgeFunction.name)
+  }
+
+  const formSubmit = async (onSubmit) => {
+    isLoading.value = true
+
+    if (hasAdditionalErrors()) {
+      isLoading.value = false
+      return
+    }
+
+    await onSubmit()
+    isLoading.value = false
+  }
+</script>
+
+<template>
+  <ContentBlock>
+    <template #heading>
+      <PageHeadingBlock
+        :pageTitle="name"
+        description="Configure function code, triggers, and execution settings."
+      />
+    </template>
+    <template #content>
+      <EditFormBlock
+        :editService="edgeFunctionService.editEdgeFunctionService"
+        :loadService="edgeFunctionService.loadEdgeFunctionService"
+        :updatedRedirect="props.updatedRedirect"
+        :initialValues="cachedFunction"
+        @loaded-service-object="setFunctionData"
+        @on-edit-success="handleTrackSuccessEdit"
+        @on-edit-fail="handleTrackFailEdit"
+        :schema="validationSchema"
+      >
+        <template #form="{ loading }">
+          <FormSkeleton v-if="loading" />
+          <FormFieldsEditEdgeFunctions
+            v-else
+            v-model:preview-data="updateObject"
+            v-model:run="runtime"
+            v-model:name="name"
+            @additionalErrors="handleAdditionalErrors"
+          />
+        </template>
+        <template
+          v-if="!isFormLoading"
+          #action-bar="{ onSubmit, onCancel, loading }"
+        >
+          <ActionBarBlockWithTeleport
+            @onSubmit="formSubmit(onSubmit)"
+            @onCancel="onCancel"
+            :loading="isLoading || loading"
+          />
+        </template>
+      </EditFormBlock>
+    </template>
+  </ContentBlock>
+</template>

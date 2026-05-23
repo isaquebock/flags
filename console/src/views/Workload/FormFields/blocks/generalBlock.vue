@@ -1,0 +1,37 @@
+<script setup>
+  import FormHorizontal from '@/templates/create-form-block/form-horizontal'
+  import FieldText from '@aziontech/webkit/field-text'
+  import { useField } from 'vee-validate'
+
+  const { value: name } = useField('name')
+
+  const props = defineProps({
+    isDrawer: {
+      type: Boolean,
+      required: true
+    },
+    noBorder: {
+      type: Boolean,
+      required: true
+    }
+  })
+</script>
+<template>
+  <form-horizontal
+    :isDrawer="props.isDrawer"
+    :noBorder="props.noBorder"
+    title="General"
+    description="Create a Workload with Azion to launch an Application and set up security with digital certificates."
+  >
+    <template #inputs>
+      <FieldText
+        label="Name"
+        required
+        name="name"
+        placeholder="My Workload"
+        :value="name"
+        description="This is an identification name for the Workload. Once you save the configuration, the URL will be automatically generated."
+      />
+    </template>
+  </form-horizontal>
+</template>

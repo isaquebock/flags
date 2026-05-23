@@ -1,0 +1,78 @@
+import * as Helpers from '@/helpers'
+import * as DomainServices from '@/services/domains-services'
+import { documentationSecureProducts } from '@/helpers/azion-documentation-catalog'
+
+/** @type {import('vue-router').RouteRecordRaw} */
+export const edgeFirewallRoutes = {
+  path: '/firewalls',
+  name: 'firewalls',
+  children: [
+    {
+      path: '',
+      name: 'list-firewalls',
+      component: () => import('@views/EdgeFirewall/ListView.vue'),
+      props: {
+        documentationService: documentationSecureProducts.firewall
+      },
+      meta: {
+        title: 'Firewall',
+        breadCrumbs: [
+          {
+            label: 'Firewalls',
+            to: '/firewalls'
+          }
+        ]
+      }
+    },
+    {
+      path: 'create',
+      name: 'create-firewall',
+      component: () => import('@views/EdgeFirewall/CreateView.vue'),
+      props: {
+        listDomainsService: DomainServices.listDomainsService
+      },
+      meta: {
+        title: 'Create Firewall',
+        breadCrumbs: [
+          {
+            label: 'Firewalls',
+            to: '/firewalls'
+          },
+          {
+            label: 'Create',
+            to: '/firewalls/create'
+          }
+        ]
+      }
+    },
+    {
+      path: 'edit/:id/:tab?',
+      name: 'edit-firewall',
+      component: () => import('@/views/EdgeFirewall/TabsView.vue'),
+      props: {
+        listDomainsService: DomainServices.listDomainsService,
+        edgeFirewallServices: {
+          documentationService: Helpers.documentationCatalog.edgeFirewall,
+          updatedRedirect: 'list-firewalls'
+        },
+        rulesEngineServices: {
+          documentationService: Helpers.documentationCatalog.edgeFirewallRulesEngine
+        }
+      },
+      meta: {
+        title: 'Edit Firewall',
+        breadCrumbs: [
+          {
+            label: 'Firewalls',
+            to: '/firewalls'
+          },
+          {
+            label: 'Edit Firewall',
+            dynamic: true,
+            routeParam: 'id'
+          }
+        ]
+      }
+    }
+  ]
+}

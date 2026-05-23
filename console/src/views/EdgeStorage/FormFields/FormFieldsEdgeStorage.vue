@@ -1,0 +1,102 @@
+<script setup>
+  import FormHorizontal from '@/templates/create-form-block/form-horizontal'
+  import FieldText from '@aziontech/webkit/field-text'
+  import FieldDropdown from '@aziontech/webkit/field-dropdown'
+  import PrimeButton from '@aziontech/webkit/button'
+  import { useField } from 'vee-validate'
+
+  defineOptions({ name: 'form-fields-edge-storage' })
+  defineProps({
+    showDangerZone: {
+      type: Boolean,
+      default: true
+    },
+    disableNameEdit: {
+      type: Boolean,
+      default: false
+    }
+  })
+
+  defineEmits(['delete-bucket'])
+
+  const { value: name } = useField('name')
+  const { value: workloads_access } = useField('workloads_access', undefined, {
+    initialValue: 'read_only'
+  })
+
+  const workloadsAccessOptions = [
+    { label: 'Read & Write', value: 'read_write' },
+    { label: 'Read Only', value: 'read_only' },
+    { label: 'Restricted', value: 'restricted' }
+  ]
+</script>
+
+<template>
+  <div class="flex flex-col gap-8">
+    <FormHorizontal
+      title="General"
+      description="Check the details of the Object Storage Bucket."
+      :disabled="disableNameEdit"
+    >
+      <template #inputs>
+        <FieldText
+          label="Name"
+          :required="!showDangerZone"
+          name="name"
+          placeholder="Sample Bucket"
+          :value="name"
+          description="Give a unique and descriptive name to identify this bucket."
+          data-testid="edge-storage-form__name-field"
+        />
+      </template>
+    </FormHorizontal>
+    <FormHorizontal
+      title="Settings"
+      description="Define bucket access policies within the Azion platform."
+    >
+      <template #inputs>
+        <div class="flex flex-col max-w-sm gap-2">
+          <FieldDropdown
+            label="Workloads Access"
+            name="workloads_access"
+            :value="workloads_access"
+            :options="workloadsAccessOptions"
+            optionLabel="label"
+            optionValue="value"
+            description="Set the access level for Workloads to interact with this bucket. Choose whether they can read, write, or restrict access entirely."
+            data-testid="edge-storage-form__edge-access-field"
+          />
+        </div>
+      </template>
+    </FormHorizontal>
+
+    <FormHorizontal
+      v-if="showDangerZone"
+      title="Danger Zone"
+      severity="danger"
+      description="Actions in this area are irreversible and may permanently impact the account and its data. Proceed with caution."
+    >
+      <template #inputs>
+        <div class="flex flex-col w-full gap-5 sm:max-w-lg">
+          <div class="flex flex-col gap-2">
+            <label class="text-color text-base font-medium leading-5 flex gap-1 align-items-center">
+              Delete Bucket
+            </label>
+            <small class="text-sm text-color-secondary font-normal leading-5">
+              This action permanently deletes this Bucket and all associated data from Azion's
+              platform. It cannot be undone.
+            </small>
+          </div>
+          <div>
+            <PrimeButton
+              data-testid="account-settings__delete-account"
+              label="Delete Bucket"
+              severity="danger"
+              @click="$emit('delete-bucket')"
+            />
+          </div>
+        </div>
+      </template>
+    </FormHorizontal>
+  </div>
+</template>

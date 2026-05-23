@@ -1,0 +1,1094 @@
+<script setup>
+  import { useField, useFieldArray } from 'vee-validate'
+  import { computed, ref, watch } from 'vue'
+
+  import PrimeButton from '@aziontech/webkit/button'
+  import Divider from '@aziontech/webkit/divider'
+  import FieldAutoComplete from '@aziontech/webkit/field-auto-complete'
+  import FieldDropdown from '@aziontech/webkit/field-dropdown'
+  import FieldDropdownLazyLoader from '@aziontech/webkit/field-dropdown-lazy-loader'
+  import FieldGroupRadio from '@aziontech/webkit/field-group-radio'
+  import FieldSwitchBlock from '@aziontech/webkit/field-switch-block'
+  import FieldText from '@aziontech/webkit/field-text'
+  import FieldTextArea from '@aziontech/webkit/field-text-area'
+  import InlineMessage from '@aziontech/webkit/inlinemessage'
+
+  import { hasFlagBlockApiV4 } from '@/composables/user-flag'
+  import { cacheSettingsService } from '@/services/v2/edge-app/edge-app-cache-settings-service'
+  import { edgeApplicationFunctionService } from '@/services/v2/edge-app/edge-application-functions-service'
+  import { edgeConnectorsService } from '@/services/v2/edge-connectors/edge-connectors-service'
+  import FormHorizontal from '@/templates/create-form-block/form-horizontal'
+  import Drawer from '@/views/EdgeApplicationsCacheSettings/Drawer'
+  import DrawerFunction from '@/views/EdgeApplicationsFunctions/Drawer'
+  import DrawerOrigin from '@/views/EdgeApplicationsOrigins/Drawer'
+  import ConnectorDrawer from '@/views/EdgeConnectors/Drawer/index.vue'
+
+  const props = defineProps({
+    cacheSettingsOptions: {
+      type: Array,
+      required: true
+    },
+    isLoadingRequests: {
+      type: Boolean
+    },
+    originsOptions: {
+      type: Array,
+      required: true
+    },
+    isApplicationAcceleratorEnabled: {
+      type: Boolean
+    },
+    isImageOptimizationEnabled: {
+      type: Boolean
+    },
+    hideApplicationAcceleratorInDescription: {
+      type: Boolean
+    },
+    isEdgeFunctionEnabled: {
+      type: Boolean
+    },
+    edgeApplicationId: {
+      type: String,
+      required: true
+    },
+    initialPhase: {
+      type: String
+    },
+    selectedRulesEngineToEdit: {
+      type: Object,
+      default: () => {}
+    },
+    errors: {
+      type: Object
+    },
+    loadingOrigins: {
+      type: Boolean,
+      default: false
+    }
+  })
+
+  const emit = defineEmits([
+    'toggleDrawer',
+    'refreshCacheSettings',
+    'refreshOrigins',
+    'refreshFunctions',
+    'navigate-to-main-settings'
+  ])
+
+  const CRITERIA_OPERATOR_OPTIONS = [
+    { label: 'is equal', value: 'is_equal' },
+    { label: 'is not equal', value: 'is_not_equal' },
+    { label: 'starts with', value: 'starts_with' },
+    { label: 'does not start with', value: 'does_not_start_with' },
+    { label: 'matches', value: 'matches' },
+    { label: 'does not match', value: 'does_not_match' },
+    { label: 'exists', value: 'exists' },
+    { label: 'does not exist', value: 'does_not_exist' }
+  ]
+
+  const ORIGIN_OR_CONNECTOR_OPTIONS = !hasFlagBlockApiV4()
+    ? [{ label: 'Set Connector', value: 'set_connector', requires: false }]
+    : [{ label: 'Set Origin', value: 'set_origin', requires: false }]
+
+  const BEHAVIORS_DEFAULT_OPTIONS = [
+    { label: 'Deny (403 Forbidden)', value: 'deny', requires: false },
+    { label: 'Redirect To (301 Moved Permanently)', value: 'redirect_to_301', requires: false },
+    { label: 'Redirect To (302 Found)', value: 'redirect_to_302', requires: false },
+    ...ORIGIN_OR_CONNECTOR_OPTIONS,
+    { label: 'Run Function', value: 'run_function', requires: false },
+    { label: 'No Content (204)', value: 'no_content', requires: false }
+  ]
+
+  const DEFAULT_OPERATOR = {
+    variable: '${uri}',
+    operator: 'is_equal',
+    conditional: 'if',
+    argument: ''
+  }
+
+  const DEFAULT_BEHAVIOR = {
+    name: `deliver`
+  }
+
+  const DISABLE_ADD_BEHAVIOR_OPTIONS = [
+    'deliver',
+    'redirect_to_301',
+    'redirect_to_302',
+    'deny',
+    'no_content'
+  ]
+
+  const DISABLE_TARGET_OPTIONS = [
+    'deliver',
+    'enable_gzip',
+    'bypass_cache',
+    'deny',
+    'forward_cookies',
+    'no_content',
+    'optimize_images',
+    'redirect_http_to_https',
+    'run_function',
+    'set_origin',
+    'set_cache_policy',
+    'capture_match_groups'
+  ]
+
+  const VARIABLE_AUTOCOMPLETE_REQUEST_OPTIONS = ['${server_addr}', '${server_port}']
+
+  const VARIABLE_AUTOCOMPLETE_RESPONSE_OPTIONS = [
+    '${sent_http_name}',
+    '${status}',
+    '${tcpinfo_rtt}',
+    '${upstream_addr}',
+    '${upstream_cookie_}',
+    '${upstream_http_}',
+    '${upstream_status}'
+  ]
+
+  const VARIABLE_AUTOCOMPLETE_OPTIONS = [
+    '${arg_}',
+    '${args}',
+    '${cookie_}',
+    '${da_}',
+    '${device_group}',
+    '${domain}',
+    '${geoip_city_continent_code}',
+    '${geoip_city_country_code}',
+    '${geoip_city_country_name}',
+    '${geoip_city}',
+    '${geoip_continent_code}',
+    '${geoip_country_code}',
+    '${geoip_country_name}',
+    '${geoip_region_name}',
+    '${geoip_region}',
+    '${host}',
+    '${http_}',
+    '${remote_addr}',
+    '${remote_port}',
+    '${remote_user}',
+    '${request_body}',
+    '${request_method}',
+    '${request_uri}',
+    '${request}',
+    '${scheme}',
+    '${uri}'
+  ]
+
+  const PHASE_OPTIONS = [
+    {
+      title: 'Request Phase',
+      inputValue: 'request',
+      subtitle: 'Configure the requests made to the edge.'
+    },
+    {
+      title: 'Response Phase',
+      inputValue: 'response',
+      subtitle: 'Configure the responses delivered to end-users.'
+    }
+  ]
+
+  const BEHAVIORS_LABELS_TAGS = {
+    applicationAccelerator: !props.hideApplicationAcceleratorInDescription
+      ? ' - Required Application Accelerator'
+      : '',
+    https: '',
+    imageOptimization: !props.isImageOptimizationEnabled ? ' - Required Image Processor' : '',
+    edgeFunction: !props.isEdgeFunctionEnabled ? ' - Required Function' : ''
+  }
+
+  const drawerRef = ref('')
+  const drawerOriginRef = ref('')
+  const drawerFunctionRef = ref('')
+  const drawerConnectorRef = ref('')
+  const activeAccordions = ref([0])
+  const behaviorIndexSelect = ref(null)
+  const variableItems = ref([])
+
+  const behaviorsRequestOptions = ref([
+    {
+      label: 'Add Request Cookie' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'add_request_cookie',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    { label: 'Add Request Header', value: 'add_request_header', requires: false },
+    {
+      label: 'Bypass Cache' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'bypass_cache',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    {
+      label: 'Capture Match Groups' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'capture_match_groups',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    { label: 'Deliver', value: 'deliver', requires: false },
+    { label: 'Deny (403 Forbidden)', value: 'deny', requires: false },
+    { label: 'Enable Gzip', value: 'enable_gzip', requires: false },
+    {
+      label: 'Filter Request Cookie' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'filter_request_cookie',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    { label: 'Filter Request Header', value: 'filter_request_header', requires: false },
+    {
+      label: 'Forward Cookies' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'forward_cookies',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    { label: 'No Content (204)', value: 'no_content', requires: false },
+    {
+      label: 'Optimize Images' + BEHAVIORS_LABELS_TAGS.imageOptimization,
+      value: 'optimize_images',
+      requires: !props.isImageOptimizationEnabled
+    },
+    {
+      label: 'Redirect HTTP to HTTPS' + BEHAVIORS_LABELS_TAGS.https,
+      value: 'redirect_http_to_https',
+      requires: false
+    },
+    { label: 'Redirect To (301 Moved Permanently)', value: 'redirect_to_301', requires: false },
+    { label: 'Redirect To (302 Found)', value: 'redirect_to_302', requires: false },
+    {
+      label: 'Rewrite Request' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'rewrite_request',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    {
+      label: 'Run Function' + BEHAVIORS_LABELS_TAGS.edgeFunction,
+      value: 'run_function',
+      requires: !props.isEdgeFunctionEnabled
+    },
+    { label: 'Set Cache Policy', value: 'set_cache_policy', requires: false },
+    ...ORIGIN_OR_CONNECTOR_OPTIONS
+  ])
+
+  const behaviorsResponseOptions = ref([
+    {
+      label: 'Add Response Cookie' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'set_cookie',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    { label: 'Add Response Header', value: 'add_response_header', requires: false },
+    {
+      label: 'Capture Match Groups' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'capture_match_groups',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    { label: 'Deliver', value: 'deliver', requires: false },
+    { label: 'Enable Gzip', value: 'enable_gzip', requires: false },
+    {
+      label: 'Filter Response Cookie' + BEHAVIORS_LABELS_TAGS.applicationAccelerator,
+      value: 'filter_response_cookie',
+      requires: !props.hideApplicationAcceleratorInDescription
+    },
+    { label: 'Filter Response Header', value: 'filter_response_header', requires: false },
+    { label: 'Redirect To (301 Moved Permanently)', value: 'redirect_to_301', requires: false },
+    { label: 'Redirect To (302 Found)', value: 'redirect_to_302', requires: false },
+    {
+      label: 'Run Function' + BEHAVIORS_LABELS_TAGS.edgeFunction,
+      value: 'run_function',
+      requires: !props.isEdgeFunctionEnabled
+    }
+  ])
+
+  const { value: name } = useField('name')
+  const { push: pushCriteria, remove: removeCriteria, fields: criteria } = useFieldArray('criteria')
+  const {
+    push: pushBehavior,
+    remove: removeBehavior,
+    fields: behaviors
+  } = useFieldArray('behaviors')
+  const { value: phase } = useField('phase')
+  const { value: description } = useField('description')
+
+  const isEditDrawer = computed(() => !!props.selectedRulesEngineToEdit)
+
+  const isDefaultPhase = computed(() => props.initialPhase === 'default')
+
+  const isLoadingRequestsData = computed(() => {
+    return props.isLoadingRequests
+  })
+
+  const behaviorsOptionsMap = {
+    request: () => behaviorsRequestOptions.value,
+    default: () => {
+      if (behaviors.value.length === 1) {
+        return BEHAVIORS_DEFAULT_OPTIONS
+      }
+      return behaviorsRequestOptions.value
+    },
+    response: () => behaviorsResponseOptions.value
+  }
+
+  const behaviorsOptions = computed(() => {
+    return behaviorsOptionsMap[phase.value]() || []
+  })
+
+  const disableAddBehaviorButtonComputed = computed(() => {
+    const MAXIMUM_NUMBER_OF_BEHAVIORS = 10
+
+    const disableAddBehaviorButton = true
+
+    const isBehaviorsListEmpty = !behaviors.value?.length
+    if (isBehaviorsListEmpty) return disableAddBehaviorButton
+
+    const excededMaximumNumberOfBehaviors = behaviors.value.length >= MAXIMUM_NUMBER_OF_BEHAVIORS
+    if (excededMaximumNumberOfBehaviors) return disableAddBehaviorButton
+
+    const lastBehavior = behaviors.value[behaviors.value.length - 1]
+
+    const isLastBehaviorEmpty = !lastBehavior.value.name
+    if (isLastBehaviorEmpty) return disableAddBehaviorButton
+
+    return DISABLE_ADD_BEHAVIOR_OPTIONS.includes(lastBehavior.value.name)
+  })
+
+  const maximumCriteriaReached = computed(() => {
+    const MAXIMUM_ALLOWED = 5
+    return criteria.value.length >= MAXIMUM_ALLOWED
+  })
+
+  const placeholderBehaviors = (behavior) => {
+    const placeholders = {
+      add_request_cookie: 'cookie-name=value',
+      add_request_header: 'header-name: value',
+      filter_request_cookie: 'cookie-name or cookie-name=cookie-value',
+      filter_request_header: 'header-name',
+      redirect_to_301: 'location',
+      redirect_to_302: 'location',
+      rewrite_request: 'URL-path',
+      set_cookie: 'cookie-name=value',
+      add_response_header: 'header-name: value'
+    }
+
+    return placeholders[behavior] || ''
+  }
+
+  const showDefaultField = (name) => {
+    return !DISABLE_TARGET_OPTIONS.includes(name)
+  }
+
+  const isNotLastCriteria = (criteriaIndex) => {
+    return criteriaIndex !== criteria.value.length - 1
+  }
+
+  const shouldRenderCriteriaValueInput = (criteriaIndex, conditionalIndex) => {
+    return (
+      criteria.value[criteriaIndex].value[conditionalIndex].operator !== 'exists' &&
+      criteria.value[criteriaIndex].value[conditionalIndex].operator !== 'does_not_exist'
+    )
+  }
+
+  const getBehaviorLabel = (behaviorItem) => {
+    return behaviorItem.isFirst ? 'Then' : 'And'
+  }
+
+  const maximumConditionalsByCriteriaReached = (criteriaIndex) => {
+    const MAXIMUM_ALLOWED = 10
+    return criteria.value[criteriaIndex].value.length >= MAXIMUM_ALLOWED
+  }
+
+  const getEdgeConnectors = async (query) => {
+    return await edgeConnectorsService.listEdgeConnectorsService({
+      fields: 'id,name',
+      ...query
+    })
+  }
+
+  const getFunctionsInstanceOptions = async (query) => {
+    return await edgeApplicationFunctionService.listFunctionsDropdown(props.edgeApplicationId, {
+      fields: 'id,name',
+      ...query
+    })
+  }
+
+  const getLuaFunctionsInstanceOptions = async (query) => {
+    return await edgeApplicationFunctionService.listFunctionsDropdown(props.edgeApplicationId, {
+      fields: 'id,name,function',
+      runtime: 'azion_lua',
+      pageSize: 100,
+      ...query
+    })
+  }
+
+  const loadFunctionsInstance = async ({ id }) => {
+    return await edgeApplicationFunctionService.loadEdgeApplicationFunction({
+      edgeApplicationID: props.edgeApplicationId,
+      functionID: id
+    })
+  }
+
+  const removeConditional = (criteriaIndex, conditionalIndex) => {
+    criteria.value[criteriaIndex].value.splice(conditionalIndex, 1)
+  }
+
+  const removeCriteriaDecorator = (index) => {
+    activeAccordions.value.splice(index, 1)
+    removeCriteria(index)
+    if (activeAccordions.value[index]) {
+      const invertedAccordionState = activeAccordions.value[index] === null ? 0 : null
+      activeAccordions.value[index] = invertedAccordionState
+    }
+  }
+
+  const addNewConditional = ({ index, operator }) => {
+    criteria.value[index].value.push({ ...DEFAULT_OPERATOR, conditional: operator })
+  }
+
+  const openDrawer = () => {
+    drawerRef.value.openCreateDrawer()
+  }
+
+  const openDrawerOrigin = () => {
+    drawerOriginRef.value.openDrawerCreate()
+  }
+
+  const openDrawerFunction = (index) => {
+    behaviorIndexSelect.value = index
+    drawerFunctionRef.value.openDrawerCreate()
+  }
+
+  const openDrawerConnector = (index) => {
+    behaviorIndexSelect.value = index
+    drawerConnectorRef.value.openCreateDrawer()
+  }
+
+  const addNewCriteria = () => {
+    activeAccordions.value.push(0)
+    pushCriteria([DEFAULT_OPERATOR])
+  }
+
+  const addNewBehavior = () => {
+    pushBehavior({ ...DEFAULT_BEHAVIOR })
+  }
+
+  const searchVariableOption = (event) => {
+    let combinedOptions = [...VARIABLE_AUTOCOMPLETE_OPTIONS]
+
+    if (phase.value === 'request') {
+      combinedOptions = [...combinedOptions, ...VARIABLE_AUTOCOMPLETE_REQUEST_OPTIONS]
+    } else if (phase.value === 'response') {
+      combinedOptions = [...combinedOptions, ...VARIABLE_AUTOCOMPLETE_RESPONSE_OPTIONS]
+    }
+
+    variableItems.value = combinedOptions.filter((item) => item.includes(event.query))
+  }
+
+  const openAccordionWithFormErrors = () => {
+    if (!props.errors) return
+
+    const errorsKeys = Object.keys(props.errors)
+    if (errorsKeys.length > 0) {
+      const match = errorsKeys.find((key) => key.includes('criteria'))
+      const indexMatch = errorsKeys.indexOf(match)
+      activeAccordions.value[indexMatch] = 0
+    }
+  }
+
+  const handleSuccess = () => {
+    emit('refreshCacheSettings')
+  }
+
+  const handleSuccessOrigin = () => {
+    emit('refreshOrigins')
+  }
+
+  const handleSuccessFunction = async (functionId) => {
+    if (behaviorIndexSelect.value === null) return
+    behaviors.value[behaviorIndexSelect.value].value.functionId = functionId
+    behaviorIndexSelect.value = null
+  }
+
+  const successCreateConnector = ({ id }) => {
+    if (behaviorIndexSelect.value === null) return
+    behaviors.value[behaviorIndexSelect.value].value.edgeConnectorId = id
+    behaviorIndexSelect.value = null
+  }
+
+  const navigateToMainSettings = () => {
+    emit('navigate-to-main-settings')
+  }
+
+  watch(
+    () => criteria.value.length,
+    () => {
+      if (criteria.value.length > activeAccordions.value.length) {
+        criteria.value.forEach((index) => {
+          if (!activeAccordions.value[index]) {
+            activeAccordions.value.push(0)
+          }
+        })
+      }
+    }
+  )
+
+  watch(
+    () => drawerConnectorRef.value.showCreateDrawer,
+    () => {
+      emit('toggleDrawer', drawerConnectorRef.value.showCreateDrawer)
+    }
+  )
+
+  watch(
+    () => drawerRef.value.showCreateDrawer,
+    () => {
+      emit('toggleDrawer', drawerRef.value.showCreateDrawer)
+    }
+  )
+
+  watch(
+    () => drawerOriginRef.value.showCreateOriginDrawer,
+    () => {
+      emit('toggleDrawer', drawerOriginRef.value.showCreateOriginDrawer)
+    }
+  )
+
+  watch(
+    () => drawerFunctionRef.value.showCreateFunctionDrawer,
+    () => {
+      emit('toggleDrawer', drawerFunctionRef.value.showCreateFunctionDrawer)
+    }
+  )
+
+  watch(
+    () => props.errors,
+    () => {
+      openAccordionWithFormErrors()
+    }
+  )
+
+  // Clear functionId when phase changes to 'response' to avoid invalid selections
+  watch(phase, (newPhase, oldPhase) => {
+    if (oldPhase && oldPhase !== 'response' && newPhase === 'response') {
+      behaviors.value.forEach((behavior) => {
+        if (behavior.value.name === 'run_function' && behavior.value.functionId) {
+          behavior.value.functionId = undefined
+        }
+      })
+    }
+  })
+</script>
+
+<template>
+  <FormHorizontal
+    isDrawer
+    title="General"
+    description="Create a rule to handle the conditional execution of behaviors through logical operators."
+    data-testid="rule-form-general"
+  >
+    <template #inputs>
+      <ConnectorDrawer
+        ref="drawerConnectorRef"
+        @onSuccess="successCreateConnector"
+      />
+      <Drawer
+        ref="drawerRef"
+        @onSuccess="handleSuccess"
+        :isApplicationAcceleratorEnabled="isApplicationAcceleratorEnabled"
+        :createService="cacheSettingsService.createCacheSettingsService"
+        :edgeApplicationId="edgeApplicationId"
+        :showTieredCache="isTieredCacheEnabled"
+      />
+      <DrawerOrigin
+        ref="drawerOriginRef"
+        :showBarGoBack="false"
+        @onSuccess="handleSuccessOrigin"
+        :edgeApplicationId="edgeApplicationId"
+        :createService="createOriginService"
+      />
+      <DrawerFunction
+        ref="drawerFunctionRef"
+        @onSuccess="handleSuccessFunction"
+        :edgeApplicationId="edgeApplicationId"
+        :allowedRuntime="phase === 'response' ? 'azion_lua' : null"
+      />
+      <FieldText
+        label="Name"
+        required
+        name="name"
+        :readonly="isDefaultPhase"
+        :disabled="isDefaultPhase"
+        placeholder="My rule"
+        :value="name"
+        description="Give a unique and descriptive name to identify the rule."
+        data-testid="rule-form-general-name"
+      />
+      <div class="flex flex-col sm:max-w-lg w-full gap-2">
+        <FieldTextArea
+          label="Description"
+          :autoResize="true"
+          rows="1"
+          name="description"
+          :value="description"
+          description="Add a short description or comment to the rule."
+          data-testid="rule-form-general-description"
+        />
+      </div>
+    </template>
+  </FormHorizontal>
+
+  <FormHorizontal
+    :isDrawer="true"
+    title="Phase"
+    description="Select the phase of the execution of the rule."
+    v-if="!isDefaultPhase"
+    data-testid="rule-form-phase"
+  >
+    <template #inputs>
+      <InlineMessage
+        v-if="isEditDrawer"
+        class="p-2"
+        severity="info"
+        data-testid="rule-form-phase-message"
+      >
+        Once a rule is created, its phase cannot be changed. To change the phase, create a new rule.
+      </InlineMessage>
+
+      <FieldGroupRadio
+        nameField="phase"
+        isCard
+        :options="PHASE_OPTIONS"
+        data-testid="edge-application-rule-form__phase__radio-group"
+        :disabled="isEditDrawer"
+      />
+    </template>
+  </FormHorizontal>
+
+  <FormHorizontal
+    :isDrawer="true"
+    title="Criteria"
+    description="Set the conditions to execute the rule. Add a variable, the comparison operator and, if prompted, an argument."
+    data-testid="rule-form-criteria"
+  >
+    <template #inputs>
+      <div
+        class="flex flex-col"
+        v-for="(_, criteriaIndex) in criteria"
+        :key="criteriaIndex"
+      >
+        <div
+          v-for="(item, conditionalIndex) in criteria[criteriaIndex].value"
+          :key="conditionalIndex"
+          data-testid="rule-form-criteria-item-conditional"
+        >
+          <div class="flex items-center gap-2">
+            <Divider
+              align="left"
+              type="dashed"
+              class="capitalize z-0"
+              data-testid="rule-form-criteria-item-conditional-divider"
+            >
+              {{ item.conditional }}
+            </Divider>
+
+            <PrimeButton
+              v-if="conditionalIndex !== 0"
+              icon="pi pi-trash"
+              size="small"
+              outlined
+              @click="removeConditional(criteriaIndex, conditionalIndex)"
+              data-testid="rule-form-criteria-item-conditional-remove-button"
+            />
+          </div>
+
+          <div class="flex flex-col gap-4 sm:flex-row sm:gap-6 mt-6 mb-8 w-full">
+            <div class="flex flex-col w-full">
+              <FieldAutoComplete
+                :data-testid="`edge-application-rule-form__criteria-variable[${criteriaIndex}][${conditionalIndex}]__autocomplete`"
+                :id="`criteria[${criteriaIndex}][${conditionalIndex}].variable`"
+                :name="`criteria[${criteriaIndex}][${conditionalIndex}].variable`"
+                :value="criteria[criteriaIndex].value[conditionalIndex].variable"
+                :suggestions="variableItems"
+                :onComplete="searchVariableOption"
+                icon="pi pi-search"
+                :disabled="!props.isApplicationAcceleratorEnabled || isDefaultPhase"
+                completeOnFocus
+              />
+            </div>
+            <div class="flex flex-col w-full sm:max-w-[160px]">
+              <FieldDropdown
+                :options="CRITERIA_OPERATOR_OPTIONS"
+                optionLabel="label"
+                optionValue="value"
+                class="h-fit w-full"
+                :name="`criteria[${criteriaIndex}][${conditionalIndex}].operator`"
+                :value="criteria[criteriaIndex].value[conditionalIndex].operator"
+                :disabled="isDefaultPhase"
+                :data-testid="`edge-application-rule-form__criteria-operator[${criteriaIndex}][${conditionalIndex}]`"
+              />
+            </div>
+            <div class="flex flex-col w-full">
+              <FieldText
+                :data-testid="`edge-application-rule-form__criteria-input-value[${criteriaIndex}][${conditionalIndex}]`"
+                v-if="shouldRenderCriteriaValueInput(criteriaIndex, conditionalIndex)"
+                :name="`criteria[${criteriaIndex}][${conditionalIndex}].argument`"
+                :value="criteria[criteriaIndex].value[conditionalIndex].argument"
+                :disabled="isDefaultPhase"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="flex gap-2 mb-8"
+          v-if="!isDefaultPhase"
+          data-testid="rule-form-criteria-item-conditional-add-button"
+        >
+          <PrimeButton
+            icon="pi pi-plus-circle"
+            label="And"
+            size="small"
+            :disabled="
+              maximumConditionalsByCriteriaReached(criteriaIndex) ||
+              !isApplicationAcceleratorEnabled
+            "
+            outlined
+            @click="addNewConditional({ index: criteriaIndex, operator: 'and' })"
+          />
+          <PrimeButton
+            icon="pi pi-plus-circle"
+            label="Or"
+            size="small"
+            :disabled="
+              maximumConditionalsByCriteriaReached(criteriaIndex) ||
+              !isApplicationAcceleratorEnabled
+            "
+            outlined
+            @click="addNewConditional({ index: criteriaIndex, operator: 'or' })"
+          />
+          <InlineMessage
+            v-if="!isApplicationAcceleratorEnabled"
+            severity="info"
+            icon="pi pi-lock"
+            class="bg-transparent opacity-50"
+          >
+            Enable
+            <button
+              type="button"
+              class="text-[var(--text-color-link)] hover:underline cursor-pointer"
+              @click="navigateToMainSettings"
+            >
+              Application Accelerator
+            </button>
+            module to add more conditions.
+          </InlineMessage>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <Divider
+            v-if="isNotLastCriteria(criteriaIndex)"
+            align="left"
+            type="dashed"
+            class="capitalize z-0"
+          >
+            and
+          </Divider>
+          <Divider
+            v-else
+            align="left"
+            type="solid"
+          />
+          <PrimeButton
+            v-if="criteriaIndex !== criteria.length - 1"
+            icon="pi pi-trash"
+            size="small"
+            outlined
+            @click="removeCriteriaDecorator(criteriaIndex + 1)"
+            :data-testid="`edge-application-rule-form__criteria-remove[${criteriaIndex}]__button`"
+          />
+        </div>
+      </div>
+
+      <div
+        v-if="!isDefaultPhase"
+        class="flex items-center gap-2"
+      >
+        <PrimeButton
+          icon="pi pi-plus-circle"
+          label="Add Criteria"
+          size="small"
+          outlined
+          :disabled="maximumCriteriaReached || !isApplicationAcceleratorEnabled"
+          @click="addNewCriteria"
+          data-testid="rule-form-criteria-add-button"
+        />
+        <InlineMessage
+          v-if="!isApplicationAcceleratorEnabled"
+          severity="info"
+          icon="pi pi-lock"
+          class="bg-transparent opacity-50"
+        >
+          You can add more criteria enabling
+          <button
+            type="button"
+            class="text-[var(--text-color-link)] hover:underline cursor-pointer"
+            @click="navigateToMainSettings"
+          >
+            Application Accelerator
+          </button>
+          module.
+        </InlineMessage>
+      </div>
+    </template>
+  </FormHorizontal>
+
+  <FormHorizontal
+    :isDrawer="true"
+    title="Behaviors"
+    description="Set the behaviors the rule should perform if the conditions defined in the criteria are met. Select a behavior and fill in all required information. Some behaviors can't be added together or in some conditions."
+    data-testid="rule-form-behaviors"
+  >
+    <template #inputs>
+      <div
+        class="flex flex-col gap-2"
+        v-for="(behaviorItem, behaviorIndex) in behaviors"
+        :key="behaviorItem.key"
+      >
+        <div class="flex items-center gap-2">
+          <Divider
+            align="left"
+            type="dashed z-0"
+            data-testid="rule-form-behaviors-item-divider"
+          >
+            {{ getBehaviorLabel(behaviorItem) }}
+          </Divider>
+
+          <PrimeButton
+            v-if="behaviorIndex !== 0"
+            icon="pi pi-trash"
+            size="small"
+            outlined
+            @click="removeBehavior(behaviorIndex)"
+            data-testid="rule-form-behaviors-item-remove-button"
+          />
+        </div>
+
+        <div class="flex gap-2 mt-6 mb-8">
+          <div class="w-1/2">
+            <FieldDropdown
+              filter
+              :key="behaviorItem.key"
+              :name="`behaviors[${behaviorIndex}].name`"
+              :options="behaviorsOptions"
+              optionLabel="label"
+              optionValue="value"
+              optionDisabled="requires"
+              v-bind:value="behaviors[behaviorIndex].value.name"
+              :data-testid="`edge-application-rule-form__behaviors-item[${behaviorIndex}]`"
+            />
+          </div>
+
+          <div class="w-1/2">
+            <template v-if="behaviorItem.value.name === 'run_function'">
+              <div class="flex flex-col gap-2 w-full">
+                <FieldDropdownLazyLoader
+                  :service="
+                    phase === 'response'
+                      ? getLuaFunctionsInstanceOptions
+                      : getFunctionsInstanceOptions
+                  "
+                  :loadService="loadFunctionsInstance"
+                  :loading="loadingFunctionsInstance"
+                  :name="`behaviors[${behaviorIndex}].functionId`"
+                  optionLabel="name"
+                  optionValue="id"
+                  :key="`${behaviorItem.key}-${phase}`"
+                  :value="behaviors[behaviorIndex].value.functionId"
+                  :data-testid="`edge-application-rule-form__function-instance-item[${behaviorIndex}]`"
+                  :description="
+                    phase === 'response'
+                      ? 'Only functions with Lua runtime are available for Response phase.'
+                      : ''
+                  "
+                >
+                  <template #footer>
+                    <ul class="p-2">
+                      <li>
+                        <PrimeButton
+                          class="w-full whitespace-nowrap flex"
+                          data-testid="edge-applications-rules-engine-form__create-function-instance-button"
+                          text
+                          @click="openDrawerFunction(behaviorIndex)"
+                          size="small"
+                          icon="pi pi-plus-circle"
+                          :pt="{
+                            label: { class: 'w-full text-left' },
+                            root: { class: 'p-2' }
+                          }"
+                          label="Create Function Instance"
+                        />
+                      </li>
+                    </ul>
+                  </template>
+                </FieldDropdownLazyLoader>
+              </div>
+            </template>
+            <template v-else-if="behaviorItem.value.name === 'set_connector'">
+              <FieldDropdownLazyLoader
+                :service="getEdgeConnectors"
+                :loadService="edgeConnectorsService.loadEdgeConnectorsService"
+                :loading="loadingOrigins"
+                :name="`behaviors[${behaviorIndex}].edgeConnectorId`"
+                optionLabel="name"
+                optionValue="id"
+                :key="behaviorItem.key"
+                :value="behaviors[behaviorIndex].value.edgeConnectorId"
+                :data-testid="`edge-application-rule-form__edge-connector-item[${behaviorIndex}]`"
+              >
+                <template #footer>
+                  <ul class="p-2">
+                    <li>
+                      <PrimeButton
+                        class="w-full whitespace-nowrap flex"
+                        data-testid="edge-applications-rules-engine-form__create-connector-button"
+                        text
+                        @click="openDrawerConnector(behaviorIndex)"
+                        size="small"
+                        icon="pi pi-plus-circle"
+                        :pt="{
+                          label: { class: 'w-full text-left' },
+                          root: { class: 'p-2' }
+                        }"
+                        label="Create Connector"
+                      />
+                    </li>
+                  </ul>
+                </template>
+              </FieldDropdownLazyLoader>
+            </template>
+            <template v-else-if="behaviorItem.value.name === 'set_origin'">
+              <FieldDropdown
+                filter
+                :loading="loadingOrigins"
+                :name="`behaviors[${behaviorIndex}].originId`"
+                :options="originsOptions"
+                optionLabel="name"
+                optionValue="originId"
+                :key="behaviorItem.key"
+                :value="behaviors[behaviorIndex].value.originId"
+                :data-testid="`edge-application-rule-form__origin-item[${behaviorIndex}]`"
+              >
+                <template #footer>
+                  <ul class="p-2">
+                    <li>
+                      <PrimeButton
+                        class="w-full whitespace-nowrap flex"
+                        data-testid="edge-applications-rules-engine-form__create-origin-button"
+                        text
+                        @click="openDrawerOrigin"
+                        size="small"
+                        icon="pi pi-plus-circle"
+                        :pt="{
+                          label: { class: 'w-full text-left' },
+                          root: { class: 'p-2' }
+                        }"
+                        label="Create Origin"
+                      />
+                    </li>
+                  </ul>
+                </template>
+              </FieldDropdown>
+            </template>
+            <template v-else-if="behaviorItem.value.name === 'set_cache_policy'">
+              <FieldDropdown
+                filter
+                :loading="isLoadingRequestsData"
+                :name="`behaviors[${behaviorIndex}].cacheId`"
+                :options="cacheSettingsOptions"
+                optionLabel="name"
+                optionValue="id"
+                :key="behaviorItem.key"
+                :value="behaviors[behaviorIndex].value.cacheId"
+                :data-testid="`edge-application-rule-form__cache-settings-item[${behaviorIndex}]`"
+              >
+                <template #footer>
+                  <ul class="p-2">
+                    <li>
+                      <PrimeButton
+                        class="w-full whitespace-nowrap flex"
+                        data-testid="edge-applications-rules-engine-form__create-cache-policy-button"
+                        text
+                        @click="openDrawer"
+                        size="small"
+                        icon="pi pi-plus-circle"
+                        :pt="{
+                          label: { class: 'w-full text-left' },
+                          root: { class: 'p-2' }
+                        }"
+                        label="Create Cache Policy"
+                      />
+                    </li>
+                  </ul>
+                </template>
+              </FieldDropdown>
+            </template>
+            <template v-else-if="behaviorItem.value.name === 'capture_match_groups'">
+              <div class="flex gap-3 flex-col w-full">
+                <FieldText
+                  :name="`behaviors[${behaviorIndex}].captured_array`"
+                  :key="behaviorItem.key"
+                  placeholder="Captured array name"
+                  :value="behaviors[behaviorIndex].value.captured_array"
+                  :data-testid="`edge-application-rule-form__behaviors-item-capture-match-groups-captured-array[${behaviorIndex}]`"
+                />
+                <FieldText
+                  placeholder="Subject"
+                  :name="`behaviors[${behaviorIndex}].subject`"
+                  :key="behaviorItem.key"
+                  :value="behaviors[behaviorIndex].value.subject"
+                  :data-testid="`edge-application-rule-form__behaviors-item-capture-match-groups-subject[${behaviorIndex}]`"
+                />
+                <FieldText
+                  placeholder="Regex"
+                  :name="`behaviors[${behaviorIndex}].regex`"
+                  :key="behaviorItem.key"
+                  :value="behaviors[behaviorIndex].value.regex"
+                  :data-testid="`edge-application-rule-form__behaviors-item-capture-match-groups-regex[${behaviorIndex}]`"
+                />
+              </div>
+            </template>
+            <template v-else-if="showDefaultField(behaviorItem.value.name)">
+              <div class="[&>input]:w-full">
+                <FieldText
+                  :name="`behaviors[${behaviorIndex}].target`"
+                  :key="behaviorItem.key"
+                  :placeholder="placeholderBehaviors(behaviorItem.value.name)"
+                  :value="behaviors[behaviorIndex].value.target"
+                  :data-testid="`edge-application-rule-form__behaviors-item-target[${behaviorIndex}]`"
+                />
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+      <div>
+        <PrimeButton
+          :disabled="disableAddBehaviorButtonComputed"
+          icon="pi pi-plus-circle"
+          label="Add Behavior"
+          size="small"
+          outlined
+          @click="addNewBehavior"
+          data-testid="rule-form-behaviors-add-button"
+        />
+      </div>
+    </template>
+  </FormHorizontal>
+
+  <FormHorizontal
+    :isDrawer="true"
+    title="Status"
+    data-testid="rule-form-status"
+  >
+    <template #inputs>
+      <FieldSwitchBlock
+        nameField="isActive"
+        name="active"
+        auto
+        :isCard="false"
+        title="Active"
+        data-testid="rule-form-status-switch"
+      />
+    </template>
+  </FormHorizontal>
+</template>

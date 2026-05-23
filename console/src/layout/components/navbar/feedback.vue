@@ -1,0 +1,193 @@
+<template>
+  <PrimeButton
+    :pt="{
+      root: { class: 'max-md:w-[2rem] h-[2rem] justify-content-center' },
+      label: { class: 'max-md:hidden' },
+      icon: { class: `max-md:m-0 ${props.styleTextColor}` }
+    }"
+    icon="pi pi-flag"
+    size="small"
+    label="Feedback"
+    :outlined="props.outlined"
+    :class="props.class"
+    @click="visible = true"
+    v-tooltip.bottom="{ value: 'Feedback', showDelay: 200 }"
+    data-testid="header-block__open-feedback-button"
+  />
+
+  <Dialog
+    v-model:visible="visible"
+    modal
+    @show="resetForm()"
+    header="Report an issue"
+    :style="{ width: '35rem' }"
+  >
+    <div class="flex flex-col gap-5">
+      <div class="flex flex-col gap-3">
+        <label
+          for="type"
+          class="font-semibold"
+          >Type</label
+        >
+        <Dropdown
+          v-model="selectedIssueType"
+          :options="types"
+          optionLabel="name"
+          optionValue="code"
+          placeholder="Select one Type"
+          class="max-w-[216px]"
+          data-testid="feedback-dialog__dialog-body__button-type-dropdown"
+        />
+      </div>
+      <div class="flex flex-col gap-3">
+        <label
+          for="type"
+          class="font-semibold"
+          >Report an issue</label
+        >
+        <Textarea
+          v-model="report"
+          rows="5"
+          cols="30"
+          data-testid="feedback-dialog__dialog-body__textarea-description"
+        />
+      </div>
+    </div>
+    <template #footer>
+      <div
+        class="flex justify-between items-center w-full flex-col-reverse sm:flex-row gap-2 sm:gap-0"
+      >
+        <div
+          class="flex flex-wrap text-xs font-normal justify-start w-full gap-1 sm:gap-0 sm:w-auto"
+        >
+          <span>Have a technical issue? Contact</span>
+          <span>
+            <a
+              class="text-[var(--text-color-link)] hover:text-[var(--text-color-link-hover)] cursor-pointer hover:underline"
+              small
+              @click="openCopilot"
+              data-testid="feedback-dialog__dialog-footer__copilot-link"
+              >Azion Copilot</a
+            >
+            or
+            <a
+              class="text-[var(--text-color-link)] hover:text-[var(--text-color-link-hover)] cursor-pointer hover:underline"
+              :href="AZION_CONTACT_SUPPORT"
+              target="_blank"
+              data-testid="feedback-dialog__dialog-footer__support-link"
+              >Azion Support</a
+            >.
+          </span>
+        </div>
+        <div class="flex gap-2 w-full sm:w-auto">
+          <PrimeButton
+            type="button"
+            label="Cancel"
+            outlined
+            size="small"
+            class="w-20"
+            @click="visible = false"
+            data-testid="feedback-dialog__dialog-footer__cancel-button"
+          />
+          <PrimeButton
+            type="button"
+            severity="secondary"
+            label="Send feedback"
+            class="sm:w-36"
+            size="small"
+            :loading="loading"
+            @click="sendFeedback()"
+            data-testid="feedback-dialog__dialog-footer__confirm-button"
+          />
+        </div>
+      </div>
+    </template>
+  </Dialog>
+</template>
+
+<script setup>
+  import { ref } from 'vue'
+  import { storeToRefs } from 'pinia'
+  import { useAccountStore } from '@/stores/account'
+  import { createFeedbackServices } from '@/services/feedback-services'
+  import { useLayout } from '@/composables/use-layout'
+  import { AZION_CONTACT_SUPPORT } from '@/helpers/azion-documentation-window-opener'
+  import { useToast } from '@aziontech/webkit/use-toast'
+  import Dialog from '@aziontech/webkit/dialog'
+  import Dropdown from '@aziontech/webkit/dropdown'
+  import Textarea from '@aziontech/webkit/textarea'
+  import PrimeButton from '@aziontech/webkit/button'
+
+  defineOptions({ name: 'console-feedback' })
+
+  const props = defineProps({
+    styleTextColor: {
+      type: String,
+      default: () => 'text-color'
+    },
+    class: {
+      type: String
+    },
+    outlined: {
+      type: Boolean,
+      default: true
+    }
+  })
+
+  const { accountData: account } = storeToRefs(useAccountStore())
+  const { OpenSidebarComponent } = useLayout()
+  const toast = useToast()
+
+  const visible = ref(false)
+  const loading = ref(false)
+  const selectedIssueType = ref('issue')
+  const report = ref('')
+
+  const types = [
+    { name: 'Issue', code: 'issue' },
+    { name: 'Idea', code: 'idea' },
+    { name: 'Other', code: 'other' }
+  ]
+
+  const openCopilot = () => {
+    visible.value = false
+    OpenSidebarComponent('copilot')
+  }
+
+  const resetForm = () => {
+    selectedIssueType.value = 'issue'
+    report.value = ''
+  }
+
+  const sendFeedback = async () => {
+    try {
+      loading.value = true
+      const payload = {
+        type: selectedIssueType.value,
+        account_id: account.value.id,
+        client_id: account.value.client_id,
+        name: account.value.name,
+        email: account.value.email,
+        description: report.value
+      }
+      await createFeedbackServices(payload)
+      toast.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Feedback sent successfully',
+        life: 3000
+      })
+      resetForm()
+      visible.value = false
+    } catch (error) {
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Error sending feedback',
+        life: 3000
+      })
+    } finally {
+      loading.value = false
+    }
+  }
+</script>

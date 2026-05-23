@@ -1,0 +1,54 @@
+import * as EdgeNodeService from '@/services/edge-node-services'
+import * as ServiceEdgeNode from '@/services/edge-node-service-services'
+import * as Helpers from '@/helpers'
+import { documentationDeployProducts } from '@/helpers/azion-documentation-catalog'
+
+/** @type {import('vue-router').RouteRecordRaw} */
+export const edgeNodeRoutes = {
+  path: '/edge-node',
+  name: 'edge-node',
+  children: [
+    {
+      path: '',
+      name: 'list-edge-node',
+      component: () => import('@views/EdgeNode/ListView.vue'),
+      props: {
+        documentationService: documentationDeployProducts.edgeNode
+      },
+      meta: {
+        title: 'Edge Nodes',
+        breadCrumbs: [
+          {
+            label: 'Edge Nodes',
+            to: '/edge-node'
+          }
+        ]
+      }
+    },
+    {
+      path: 'edit/:id/:services?',
+      name: 'edit-edge-node',
+      component: () => import('@/views/EdgeNode/TabsView.vue'),
+      props: {
+        listGroupsEdgeNodeService: EdgeNodeService.listGroupsEdgeNodeService,
+        listServiceEdgeNodeService: ServiceEdgeNode.listServiceEdgeNodeService,
+        documentationServiceServices: Helpers.documentationCatalog.edgeServices,
+        updatedRedirect: 'list-edge-node'
+      },
+      meta: {
+        title: 'Edit Edge Node',
+        breadCrumbs: [
+          {
+            label: 'Edge Nodes',
+            to: '/edge-node'
+          },
+          {
+            label: 'Edit Edge Node',
+            dynamic: true,
+            routeParam: 'id'
+          }
+        ]
+      }
+    }
+  ]
+}

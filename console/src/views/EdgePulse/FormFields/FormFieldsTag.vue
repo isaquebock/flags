@@ -1,0 +1,52 @@
+<script setup>
+  import { ref, computed } from 'vue'
+  import { useThemeStore } from '@/stores/theme'
+  import copyBlock from '@aziontech/webkit/button-copy'
+
+  import FormHorizontal from '@/templates/create-form-block/form-horizontal'
+  const preLoadingTagCode = ref(
+    `<script async src="//client.azionrum.net/8900e/azion-pulse.js"><${'/'}script>`
+  )
+
+  const editorOptions = ref({
+    minimap: { enabled: false },
+    readOnly: true,
+    scrollBeyondLastLine: false
+  })
+
+  const store = useThemeStore()
+
+  const theme = computed(() => {
+    return store.currentTheme === 'light' ? 'vs' : 'vs-dark'
+  })
+</script>
+
+<template>
+  <FormHorizontal
+    title="Pre-loading Tag"
+    description="The script executes before the load event is fired. Recommended when using Content Security Policy settings that prevent the use of inline JavaScript."
+  >
+    <template #inputs>
+      <div>
+        <div class="flex flex-col gap-2 w-[99.9%]">
+          <vue-monaco-editor
+            v-model:value="preLoadingTagCode"
+            language="javascript"
+            :theme="theme"
+            :options="editorOptions"
+            class="min-h-[56px] surface-border overflow-clip border rounded-md p-disabled"
+          />
+          <small class="text-xs text-color-secondary font-normal leading-5">
+            Cannot edit in read-only editor
+          </small>
+        </div>
+      </div>
+      <div>
+        <copyBlock
+          :value="preLoadingTagCode"
+          label="Copy script"
+        />
+      </div>
+    </template>
+  </FormHorizontal>
+</template>

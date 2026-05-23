@@ -1,0 +1,64 @@
+<script setup>
+  import { watch, computed, ref } from 'vue'
+  import { useThemeStore } from '@/stores/theme'
+
+  const emit = defineEmits(['update:modelValue'])
+  const props = defineProps({
+    modelValue: String,
+    initialValue: String,
+    minimap: {
+      type: Boolean,
+      default: true
+    },
+    readOnly: {
+      type: Boolean
+    },
+    runtime: {
+      type: String,
+      default: 'javascript',
+      validator: (value) => {
+        return ['javascript', 'json', 'lua'].includes(value)
+      }
+    },
+    errors: Boolean
+  })
+
+  const code = ref(props.initialValue)
+
+  const EDITOR_OPTIONS = ref({
+    minimap: { enabled: props.minimap },
+    tabSize: 2,
+    formatOnPaste: true,
+    readOnly: props.readOnly
+  })
+
+  const store = useThemeStore()
+  const theme = computed(() => {
+    return store.resolvedTheme === 'light' ? 'vs' : 'vs-dark'
+  })
+
+  watch(
+    () => props.modelValue,
+    (modelValue) => (code.value = modelValue)
+  )
+  watch(
+    () => props.readOnly,
+    (value) => (EDITOR_OPTIONS.value.readOnly = value)
+  )
+</script>
+
+<template>
+  <vue-monaco-editor
+    v-model:value="code"
+    :language="runtime"
+    :theme="theme"
+    class="w-full min-h-[390px] h-full border surface-border border-r rounded-md"
+    :class="{
+      'border-transparent': !errors,
+      '!border-red-500 border h-[calc(100%-1.5rem)]': errors,
+      'cursor-not-allowed': EDITOR_OPTIONS.readOnly
+    }"
+    :options="EDITOR_OPTIONS"
+    @change="emit('update:modelValue', $event)"
+  />
+</template>

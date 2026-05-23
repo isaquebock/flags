@@ -1,0 +1,232 @@
+import { describe, expect, it, vi } from 'vitest'
+import { listServiceAndProductsChangesService } from '@/services/billing-services'
+import { AxiosHttpClientAdapter } from '@/services/axios/AxiosHttpClientAdapter'
+import { formatCurrencyString } from '@/helpers'
+
+vi.mock('@/composables/user-flag', () => ({
+  setFeatureFlags: vi.fn(),
+  useFlag: vi.fn().mockReturnValue({ value: false }),
+  hasFlagBlockApiV4: vi.fn().mockReturnValue(false)
+}))
+
+const fixtures = {
+  mockResponse: {
+    data: {
+      products: [
+        {
+          productSlug: 'application',
+          value: 6.75,
+          currency: 'BRL'
+        },
+        {
+          productSlug: 'data_stream',
+          value: 0,
+          currency: 'BRL'
+        }
+      ],
+      productMetricsValue: [
+        {
+          productSlug: 'application',
+          metricSlug: 'requests',
+          value: 5.23
+        },
+        {
+          productSlug: 'application',
+          metricSlug: 'data_transferred',
+          value: 1.52
+        },
+        {
+          productSlug: 'data_stream',
+          metricSlug: 'data_stream_data_streamed',
+          value: 0
+        },
+        {
+          productSlug: 'data_stream',
+          metricSlug: 'data_stream_requests',
+          value: 0
+        }
+      ],
+      productMetricsAccounted: [
+        {
+          productSlug: 'application',
+          metricSlug: 'requests',
+          accounted: 848506
+        },
+        {
+          productSlug: 'application',
+          metricSlug: 'data_transferred',
+          accounted: 1.726767336
+        },
+        {
+          productSlug: 'data_stream',
+          metricSlug: 'data_stream_data_streamed',
+          accounted: 0
+        },
+        {
+          productSlug: 'data_stream',
+          metricSlug: 'data_stream_requests',
+          accounted: 0
+        }
+      ],
+      productMetricsRegionValue: [
+        {
+          productSlug: 'application',
+          metricSlug: 'requests',
+          regionName: 'Brazil',
+          value: 4.97
+        },
+        {
+          productSlug: 'application',
+          metricSlug: 'requests',
+          regionName: 'Canada',
+          value: 0
+        },
+        {
+          productSlug: 'application',
+          metricSlug: 'data_transferred',
+          regionName: 'Brazil',
+          value: 1.46
+        },
+        {
+          productSlug: 'application',
+          metricSlug: 'data_transferred',
+          regionName: 'Canada',
+          value: 0
+        },
+        {
+          productSlug: 'data_stream',
+          metricSlug: 'data_stream_data_streamed',
+          regionName: 'Brazil',
+          value: 0
+        },
+        {
+          productSlug: 'data_stream',
+          metricSlug: 'data_stream_requests',
+          regionName: 'Brazil',
+          value: 0
+        }
+      ],
+      productMetricsRegionAccounted: [
+        {
+          productSlug: 'application',
+          metricSlug: 'requests',
+          regionName: 'Brazil',
+          accounted: 776472
+        },
+        {
+          productSlug: 'application',
+          metricSlug: 'requests',
+          regionName: 'Canada',
+          accounted: 0
+        },
+        {
+          productSlug: 'application',
+          metricSlug: 'data_transferred',
+          regionName: 'Brazil',
+          accounted: 1.539394378
+        },
+        {
+          productSlug: 'application',
+          metricSlug: 'data_transferred',
+          regionName: 'Canada',
+          accounted: 0
+        },
+        {
+          productSlug: 'data_stream',
+          metricSlug: 'data_stream_data_streamed',
+          regionName: 'Brazil',
+          accounted: 0
+        },
+        {
+          productSlug: 'data_stream',
+          metricSlug: 'data_stream_requests',
+          regionName: 'Brazil',
+          accounted: 0
+        }
+      ]
+    }
+  },
+  formattedResponse: {
+    data: [
+      {
+        service: 'Application',
+        value: formatCurrencyString('BRL', 6.75),
+        slug: 'application',
+        currency: 'BRL',
+        descriptions: [
+          {
+            service: 'Total Requests',
+            slug: 'requests',
+            quantity: '848,506',
+            price: formatCurrencyString('BRL', 5.23),
+            data: [
+              {
+                country: 'Brazil',
+                quantity: '776,472',
+                price: formatCurrencyString('BRL', 4.97),
+                slug: 'requests'
+              }
+            ]
+          },
+          {
+            service: 'Total Data Transferred',
+            slug: 'data_transferred',
+            quantity: '1.727 GB',
+            price: formatCurrencyString('BRL', 1.52),
+            data: [
+              {
+                country: 'Brazil',
+                quantity: '1.539 GB',
+                price: formatCurrencyString('BRL', 1.46),
+                slug: 'data_transferred'
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  mockError: [{ message: 'Error' }]
+}
+
+const makeSut = () => {
+  const sut = listServiceAndProductsChangesService
+
+  return {
+    sut
+  }
+}
+
+describe('BillingServices', () => {
+  it('should return correct data on success', async () => {
+    vi.spyOn(AxiosHttpClientAdapter, 'request').mockResolvedValueOnce({
+      statusCode: 200,
+      body: fixtures.mockResponse
+    })
+    const { sut } = makeSut()
+
+    const result = await sut()
+
+    expect(result).toEqual(fixtures.formattedResponse.data)
+    expect(result.some((item) => item.slug === 'data_stream')).toBe(false)
+  })
+
+  it('should return an error if the request fails', async () => {
+    vi.spyOn(AxiosHttpClientAdapter, 'request').mockRejectedValueOnce(fixtures.mockError)
+    const { sut } = makeSut()
+
+    await expect(sut()).rejects.toEqual(fixtures.mockError)
+  })
+
+  it('should return empty array if no products are found', async () => {
+    vi.spyOn(AxiosHttpClientAdapter, 'request').mockResolvedValueOnce({
+      statusCode: 200,
+      body: { data: { products: [] } }
+    })
+    const { sut } = makeSut()
+
+    const result = await sut()
+
+    expect(result).toEqual([])
+  })
+})

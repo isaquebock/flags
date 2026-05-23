@@ -1,0 +1,98 @@
+<script setup>
+  import CreateFormBlock from '@/templates/create-form-block'
+  import ActionBarTemplate from '@/templates/action-bar-block/action-bar-with-teleport'
+  import ContentBlock from '@/templates/content-block'
+  import PageHeadingBlock from '@/templates/page-heading-block'
+  import FormFieldsEdgeService from './FormFields/FormFieldsEdgeService'
+  import * as yup from 'yup'
+  import { inject } from 'vue'
+  import { handleTrackerError } from '@/utils/errorHandlingTracker'
+  import { edgeServiceService } from '@/services/v2/edge-service/edge-service-service'
+
+  /**@type {import('@/plugins/analytics/AnalyticsTrackerAdapter').AnalyticsTrackerAdapter} */
+  const tracker = inject('tracker')
+
+  defineOptions({ name: 'create-edge-service' })
+
+  const validateCode = (val = '') => {
+    const split = val.split(/\s*\n+\s*/).filter((row) => !!row)
+    const isValid = split.every((row) => /^\w+\s*=[^]+$/.test(row))
+    return isValid
+  }
+
+  const validationSchema = yup.object({
+    name: yup.string().required().label('Name'),
+    active: yup.boolean(),
+    code: yup.string().test('formatInvalid', 'The format is invalid', validateCode)
+  })
+
+  const initialValues = {
+    name: '',
+    code: '',
+    active: true
+  }
+
+  const handleTrackSuccessCreated = (response) => {
+    tracker.product.productCreated({
+      productName: 'Edge Service'
+    })
+    handleToast(response)
+  }
+
+  const handleTrackFailCreated = (error) => {
+    const { fieldName, message } = handleTrackerError(error)
+    tracker.product
+      .failedToCreate({
+        productName: 'Edge Service',
+        errorType: 'api',
+        fieldName: fieldName.trim(),
+        errorMessage: message
+      })
+      .track()
+  }
+
+  const handleToast = (response) => {
+    const toast = {
+      feedback: 'Your Edge Service has been created',
+      actions: {
+        link: {
+          label: 'View Edge Service',
+          callback: () => response.redirectToUrl(`/edge-services/edit/${response.id}`)
+        }
+      }
+    }
+    response.showToastWithActions(toast)
+  }
+</script>
+
+<template>
+  <ContentBlock>
+    <template #heading>
+      <PageHeadingBlock
+        pageTitle="Create Edge Service"
+        description="Configure variables and resources to orchestrate to your Edge Node."
+      ></PageHeadingBlock>
+    </template>
+    <template #content>
+      <CreateFormBlock
+        :createService="edgeServiceService.createEdgeServiceService"
+        :schema="validationSchema"
+        :initialValues="initialValues"
+        @on-response="handleTrackSuccessCreated"
+        @on-response-fail="handleTrackFailCreated"
+        disableToast
+      >
+        <template #form>
+          <FormFieldsEdgeService />
+        </template>
+        <template #action-bar="{ onSubmit, onCancel, loading }">
+          <ActionBarTemplate
+            @onSubmit="onSubmit"
+            @onCancel="onCancel"
+            :loading="loading"
+          />
+        </template>
+      </CreateFormBlock>
+    </template>
+  </ContentBlock>
+</template>
