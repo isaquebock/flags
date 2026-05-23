@@ -41,18 +41,6 @@ export async function complianceLoggerMiddleware(c: Context, next: Next) {
   const startTime = performance.now();
 
   const request = c.req.raw;
-  const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
-
-  log({
-    timestamp: new Date().toISOString(),
-    level: 'info',
-    message: 'request.started',
-    requestId,
-    method,
-    path,
-    clientIp,
-  });
-
   await next();
 
   const durationMs = Math.round(performance.now() - startTime);
