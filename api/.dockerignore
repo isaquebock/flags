@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.local
+.vscode
+.idea
+api
+bin/
+dist/
+*.md
+Makefile
