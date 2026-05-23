@@ -1,0 +1,7 @@
+{
+  "name": "feature-flags-snapshot-function",
+  "preset": "edge-function",
+  "function_id": "<replace-with-azion-function-id>",
+  "version": "0.1.0",
+  "description": "Edge Function for serving feature flags snapshots with per-account caching"
+}
